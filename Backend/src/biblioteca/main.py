@@ -1,8 +1,12 @@
 from fastapi import FastAPI
 
+from biblioteca.adapters.http import health
+
 
 def create_app() -> FastAPI:
-    return FastAPI(title="Biblioteca")
+    app = FastAPI(title="Biblioteca")
+    app.include_router(health.router)
+    return app
 
 
 app = create_app()
