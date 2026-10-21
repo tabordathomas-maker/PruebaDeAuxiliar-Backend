@@ -1,0 +1,35 @@
+[project]
+name = "biblioteca"
+version = "0.1.0"
+description = "API de préstamo de libros con arquitectura hexagonal"
+readme = "README.md"
+requires-python = ">=3.12,<3.15"
+dependencies = [
+    "fastapi (>=0.115,<1.0)",
+    "uvicorn[standard] (>=0.30)",
+    "sqlalchemy (>=2.0.36,<3.0)",
+    "psycopg[binary] (>=3.2)",
+    "alembic (>=1.14)",
+    "pydantic-settings (>=2.6)",
+    "email-validator (>=2.2)",
+    "pyjwt (>=2.10)",
+    "bcrypt (>=4.2)",
+]
+
+[tool.poetry]
+packages = [{ include = "biblioteca", from = "src" }]
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.3"
+pytest-mock = ">=3.14"
+httpx = ">=0.28"
+invoke = ">=2.2"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
