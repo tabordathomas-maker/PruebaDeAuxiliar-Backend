@@ -1,5 +1,6 @@
 """Fixtures para correr el mismo contrato contra cada implementación de repositorio.
 
+Que ambas variantes pasen las mismas pruebas demuestra que son intercambiables.
 La variante Postgres usa una base aparte (TEST_DATABASE_URL) y se omite si no hay
 servidor disponible: `invoke db` lo levanta.
 """
@@ -12,6 +13,7 @@ from alembic.config import Config
 from sqlalchemy import create_engine, make_url, text
 from sqlalchemy.exc import OperationalError
 
+from biblioteca.adapters.persistence.memory import InMemoryUnitOfWork
 from biblioteca.adapters.persistence.postgres.repositories import (
     PostgresUnitOfWork,
     build_session_factory,
@@ -63,6 +65,11 @@ def postgres_uow(postgres_engine):
     return PostgresUnitOfWork(build_session_factory(postgres_engine))
 
 
-@pytest.fixture(params=["postgres"])
+@pytest.fixture
+def memory_uow():
+    return InMemoryUnitOfWork()
+
+
+@pytest.fixture(params=["memory", "postgres"])
 def uow(request):
     return request.getfixturevalue(f"{request.param}_uow")
