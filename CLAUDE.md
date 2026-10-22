@@ -15,7 +15,7 @@ La bitácora y las historias de usuario están en `~/Downloads/Bitacora-Bibliote
 ```bash
 poetry install
 poetry run invoke up      # Postgres (Docker) + migraciones + seed + API en 127.0.0.1:8000
-poetry run invoke test    # pytest; las pruebas de Postgres se omiten si la BD no está arriba
+poetry run invoke test    # pytest --cov; falla con cobertura < 80 %. Las pruebas de Postgres se omiten si la BD no está arriba
 poetry run invoke env | db | migrate | seed | down
 ```
 

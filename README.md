@@ -59,8 +59,12 @@ Otras tareas: `invoke db`, `invoke migrate`, `invoke seed`, `invoke down` (ver `
 ## Probar
 
 ```bash
-poetry run invoke test     # o: poetry run pytest
+poetry run invoke test     # pytest con cobertura; falla si baja del 80 %
 ```
+
+`invoke test` mide la cobertura del paquete `biblioteca` (con ramas) y falla si queda por
+debajo del 80 % (`fail_under` en `pyproject.toml`). `poetry run pytest` corre las pruebas
+sin medirla, útil para lanzar un solo archivo.
 
 - **Casos de uso** (`tests/application`): son pruebas unitarias con el repositorio en memoria y con mocks (`mock_uow`, `pytest-mock`). No necesitan base de datos.
 - **HTTP** (`tests/http`): usan la app real, pero con el repositorio en memoria inyectado. Cubren el 401, el 403 y los permisos de cada rol.

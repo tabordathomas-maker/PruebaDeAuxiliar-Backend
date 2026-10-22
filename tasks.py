@@ -49,8 +49,8 @@ def up(c, host="127.0.0.1", port=8000):
 
 @task
 def test(c):
-    """Ejecuta todas las pruebas."""
-    c.run("pytest")
+    """Ejecuta todas las pruebas y exige la cobertura mínima de pyproject.toml (80 %)."""
+    c.run("pytest --cov")
 
 
 @task
