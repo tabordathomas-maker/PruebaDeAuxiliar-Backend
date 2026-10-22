@@ -1,10 +1,11 @@
 """Modelos de entrada y salida de la API compartidos entre routers."""
 
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel
 
-from biblioteca.domain.entities import Book, Category
+from biblioteca.domain.entities import Book, Category, Loan, LoanStatus
 
 
 class CategoryResponse(BaseModel):
@@ -35,4 +36,26 @@ class BookResponse(BaseModel):
             total_copies=book.total_copies,
             available_copies=book.available_copies,
             category_ids=sorted(book.category_ids, key=str),
+        )
+
+
+class LoanResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    book_id: UUID
+    status: LoanStatus
+    loaned_at: datetime | None
+    due_at: datetime | None
+    returned_at: datetime | None
+
+    @classmethod
+    def of(cls, loan: Loan) -> "LoanResponse":
+        return cls(
+            id=loan.id,
+            user_id=loan.user_id,
+            book_id=loan.book_id,
+            status=loan.status,
+            loaned_at=loan.loaned_at,
+            due_at=loan.due_at,
+            returned_at=loan.returned_at,
         )
