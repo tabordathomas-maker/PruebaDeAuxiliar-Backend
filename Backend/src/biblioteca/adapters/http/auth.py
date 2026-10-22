@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr, Field
 
 from biblioteca.adapters.http.dependencies import get_hasher, get_token_service, get_uow
+from biblioteca.adapters.http.security import public
 from biblioteca.application.auth import Login, RegisterUser
 from biblioteca.domain.ports import PasswordHasher, TokenService, UnitOfWork
 
@@ -34,6 +35,7 @@ class TokenResponse(BaseModel):
 
 
 @router.post("/register", status_code=201, response_model=UserResponse)
+@public
 def register(
     body: RegisterRequest,
     uow: UnitOfWork = Depends(get_uow),
@@ -45,6 +47,7 @@ def register(
 
 
 @router.post("/login", response_model=TokenResponse)
+@public
 def login(
     body: LoginRequest,
     uow: UnitOfWork = Depends(get_uow),
