@@ -4,15 +4,33 @@ API REST con arquitectura hexagonal para gestionar el préstamo de libros. Hay t
 roles: **administrador**, **bibliotecario** y **usuario** (lector).
 
 Stack: Python 3.12+, Poetry, FastAPI, SQLAlchemy 2 con Postgres 17, Alembic, JWT
-(PyJWT), bcrypt, pytest con pytest-mock, e Invoke para las tareas.
+(PyJWT), bcrypt, pytest con pytest-mock, ruff, Invoke para las tareas, Docker y GitHub Actions.
 
 ## Requisitos
 
 - Python 3.12 o superior
 - [Poetry](https://python-poetry.org/) 2.x
-- Docker, para Postgres
+- Docker, para Postgres y para levantar la API en un contenedor
 
-## Instalar
+## Levantar con Docker
+
+La forma más corta: la API y Postgres en contenedores, sin instalar Python.
+
+```bash
+cp .env.example .env    # y completa JWT_SECRET (32+ caracteres), LIBRARIAN_PASSWORD y ADMIN_PASSWORD
+docker compose up --build
+```
+
+Si tienes Poetry, `poetry run invoke env` crea el `.env` con secretos aleatorios.
+
+Al arrancar, el contenedor `api` aplica las migraciones, crea las cuentas iniciales si
+faltan y sirve la API en http://127.0.0.1:8000 (Swagger en `/docs`). El puerto se
+cambia con `API_PORT`. `docker compose down` lo detiene.
+
+La imagen (`Dockerfile`) tiene dos etapas: la primera instala las dependencias con
+Poetry y la segunda solo copia el entorno virtual, y corre con un usuario sin privilegios.
+
+## Instalar (desarrollo local)
 
 ```bash
 cd PruebaDeAuxiliar-Backend
@@ -55,7 +73,7 @@ Las tres son aditivas. El `downgrade` de `0002` es destructivo: borra la auditor
 > El contenedor publica Postgres en el puerto **15432**, no en el 5432, para no chocar
 > con un Postgres instalado en la máquina. Se cambia con `DB_PORT` y `DATABASE_URL`.
 
-Otras tareas: `invoke db`, `invoke migrate`, `invoke seed`, `invoke down` (ver `invoke --list`).
+Otras tareas: `invoke db`, `invoke migrate`, `invoke seed`, `invoke lint`, `invoke down` (ver `invoke --list`).
 
 ## Probar
 
@@ -77,6 +95,28 @@ Las pruebas nuevas siguen el patrón **AAA** (Arrange, Act, Assert), marcado con
 Las pruebas que usan Postgres crean y migran su propia base, `biblioteca_test`. Si
 Postgres no está levantado (`invoke db`) se **omiten** y el resto corre igual.
 
+### Estilo
+
+```bash
+poetry run invoke lint     # ruff check y ruff format --check
+```
+
+La configuración de ruff está en `pyproject.toml` (líneas de 100 caracteres; reglas de
+pycodestyle, pyflakes, isort, pyupgrade y bugbear). `ruff format .` aplica el formato.
+
+## Integración continua
+
+`.github/workflows/ci.yml` corre en cada push y pull request a `main` y `develop`, con tres jobs:
+
+1. **Estilo:** `invoke lint`.
+2. **Pruebas:** `invoke test` contra un Postgres de servicio, así que las pruebas de contrato e integración no se omiten. Falla si la cobertura baja del 80 %.
+3. **Construcción:** construye la imagen, levanta todo con `docker compose up --wait` y comprueba que `GET /` responde.
+
+## Ramas
+
+- `main`: versión estable, lista para entregar.
+- `develop`: integración; las ramas de trabajo (`feat/…`, `fix/…`, `chore/…`, `docs/…`) se fusionan aquí por pull request, y `develop` pasa a `main` cuando está estable.
+
 ## Arquitectura
 
 ```
@@ -91,6 +131,8 @@ src/biblioteca/
 ```
 
 - **Dependencias hacia adentro.** `domain` no importa nada del proyecto, `application` solo depende de `domain`, y los adaptadores dependen de ambos.
+- **Persistencia con SQLAlchemy.** El esquema se declara con SQLAlchemy (`adapters/persistence/postgres/tables.py`), las migraciones salen de él con Alembic y los repositorios usan la `Session` del ORM y el lenguaje de expresiones de SQLAlchemy (`select`, `insert`, `update`, con `FOR UPDATE` donde hace falta). Los repositorios traducen las filas a las entidades del dominio, que siguen siendo dataclasses puras sin dependencia de la base.
+- **Clases abstractas.** Los puertos de `domain/ports.py` son clases abstractas (`ABC` con `@abstractmethod`): repositorios, `UnitOfWork`, `PasswordHasher` y `TokenService`. Postgres y la memoria son dos implementaciones de las mismas interfaces.
 - **Patrón repositorio.** Los casos de uso reciben un `UnitOfWork`, que agrupa los repositorios en una transacción. La implementación concreta se inyecta en `adapters/http/dependencies.py`, y las pruebas la sustituyen con `app.dependency_overrides`.
 - **Validador global** (`adapters/http/security.py`). Es una sola dependencia registrada en la app que corre antes de cada ruta. Toda ruta es privada por defecto:
   - Sin token, o con un token inválido o expirado, responde **401**.
