@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from biblioteca.adapters.http.dependencies import get_uow
 from biblioteca.adapters.http.schemas import BookResponse, CategoryResponse
@@ -11,6 +11,7 @@ from biblioteca.application.catalog import (
     CreateBook,
     CreateCategory,
     ListCategories,
+    UpdateBook,
 )
 from biblioteca.application.search import SearchBooksByCategory
 from biblioteca.domain.entities import RoleName
@@ -29,6 +30,22 @@ class BookRequest(BaseModel):
     isbn: str = Field(min_length=1)
     total_copies: int = Field(ge=1)
     category_ids: list[UUID] = []
+
+
+class UpdateBookRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = Field(default=None, min_length=1)
+    author: str | None = Field(default=None, min_length=1)
+    isbn: str | None = Field(default=None, min_length=1)
+    total_copies: int | None = Field(default=None, ge=1)
+
+    @model_validator(mode="after")
+    def _not_empty(self) -> "UpdateBookRequest":
+        values = (self.title, self.author, self.isbn, self.total_copies)
+        if all(value is None for value in values):
+            raise ValueError("Indica al menos un dato que modificar")
+        return self
 
 
 class AssignCategoriesRequest(BaseModel):
@@ -56,6 +73,15 @@ def search_books(category_id: UUID, uow: UnitOfWork = Depends(get_uow)):
 def create_book(body: BookRequest, uow: UnitOfWork = Depends(get_uow)):
     book = CreateBook(uow).execute(
         body.title, body.author, body.isbn, body.total_copies, body.category_ids
+    )
+    return BookResponse.of(book)
+
+
+@router.patch("/books/{book_id}", response_model=BookResponse)
+@roles(RoleName.ADMIN, RoleName.LIBRARIAN)
+def update_book(book_id: UUID, body: UpdateBookRequest, uow: UnitOfWork = Depends(get_uow)):
+    book = UpdateBook(uow).execute(
+        book_id, body.title, body.author, body.isbn, body.total_copies
     )
     return BookResponse.of(book)
 

@@ -3,7 +3,12 @@
 from collections.abc import Iterable
 from uuid import UUID
 
-from biblioteca.application.errors import BusinessRuleError, ConflictError, NotFoundError
+from biblioteca.application.errors import (
+    BusinessRuleError,
+    ConflictError,
+    NotFoundError,
+    StockError,
+)
 from biblioteca.domain.entities import Book, Category
 from biblioteca.domain.ports import UnitOfWork
 
@@ -69,6 +74,55 @@ class CreateBook:
                 category_ids=category_ids,
             )
             self.uow.books.add(book)
+            self.uow.commit()
+            return book
+
+
+class UpdateBook:
+    """Administrador y bibliotecario corrigen los datos de un libro.
+
+    Cambiar `total_copies` mueve `available_copies` en la misma cantidad: los ejemplares
+    reservados o prestados siguen retenidos, así que no se puede bajar el total por
+    debajo de los que están fuera.
+    """
+
+    def __init__(self, uow: UnitOfWork) -> None:
+        self.uow = uow
+
+    def execute(
+        self,
+        book_id: UUID,
+        title: str | None = None,
+        author: str | None = None,
+        isbn: str | None = None,
+        total_copies: int | None = None,
+    ) -> Book:
+        with self.uow:
+            book = self.uow.books.get(book_id, for_update=True)
+            if book is None:
+                raise NotFoundError("El libro no existe")
+            if title is not None:
+                book.title = title.strip()
+            if author is not None:
+                book.author = author.strip()
+            if isbn is not None:
+                isbn = isbn.strip()
+                owner = self.uow.books.get_by_isbn(isbn)
+                if owner is not None and owner.id != book.id:
+                    raise ConflictError(f"Ya existe un libro con el ISBN {isbn}")
+                book.isbn = isbn
+            if total_copies is not None:
+                if total_copies < 1:
+                    raise BusinessRuleError("Un libro debe tener al menos un ejemplar")
+                available = book.available_copies + total_copies - book.total_copies
+                if available < 0:
+                    raise StockError(
+                        f"Hay {book.total_copies - book.available_copies} ejemplares fuera; "
+                        "el total no puede ser menor"
+                    )
+                book.total_copies = total_copies
+                book.available_copies = available
+            self.uow.books.update(book)
             self.uow.commit()
             return book
 
