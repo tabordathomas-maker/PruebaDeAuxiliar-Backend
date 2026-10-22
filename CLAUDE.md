@@ -142,17 +142,18 @@ REJECTED          OVERDUE ──────────────────
 
 ## Avance
 
-`main` tiene 24 commits: el roadmap original, la fase 5 de `implementar.md` y tres commits que
-se separaron al reescribir la historia por la retroalimentación (ver abajo). La rama
-`fix/review-feedback` corrige los puntos de `~/Downloads/retroalimentacion-prueba-backend.pdf`
-y se integra por Pull Request. Con ella, la suite queda en 348 pruebas y 98 % de cobertura.
+`main` reúne el roadmap original, la fase 5 de `implementar.md` (con tres commits que se
+separaron al reescribir la historia por la retroalimentación) y la fase 6: la rama
+`fix/review-feedback`, que corrige los puntos de `~/Downloads/retroalimentacion-prueba-backend.pdf`
+y se fusionó con el PR #1. La suite queda en 348 pruebas y 98 % de cobertura. El `.coverage`
+que genera `pytest --cov` está en `.gitignore`: nunca se versiona.
 - Fase 1, base: `chore: add project base with poetry`, `feat: add health route`.
 - Fase 2, dominio y datos: `feat: add domain entities`, `chore: switch the test client to httpx2`, `feat: add repository ports`, `feat: add postgres repositories and schema`, `feat: add in memory repositories`.
 - Fase 3, seguridad: `feat: add jwt authentication`, `feat: add global role validators`.
 - Fase 4, casos de uso: `feat: add catalog management use case`, `feat: add book search by category use case`, `chore: share postgres and mock fixtures across tests`, `feat: add borrow book use case`, `feat: add return book use case`, `feat: add list loans use case`, `feat: add librarian loan management use case`.
 - Cierre: `docs: add readme and er diagram`, `chore: move backend files to repository root` (ya no existe la carpeta `Backend/`), `docs: update readme for the repository root`.
 - Fase 5, admin, cuentas y auditoría: `feat: add admin role and loan audit persistence`, `feat: add account management use cases`, `feat: add book update use case`, `feat: add loan terms modification with audit`, `docs: document admin role, accounts and loan audit`.
-- Fase 6, retroalimentación (rama `fix/review-feedback`): `fix: require secrets from the environment`, `fix: answer 409 on simultaneous duplicates`, `fix: reject blank required texts`, `chore: enforce minimum test coverage`, `fix: load book categories in a single query`, `fix: keep book categories when updating a book`, `feat: store the loan request date`, `docs: update project notes for the review fixes`.
+- Fase 6, retroalimentación (rama `fix/review-feedback`): `fix: require secrets from the environment`, `fix: answer 409 on simultaneous duplicates`, `fix: reject blank required texts`, `chore: enforce minimum test coverage`, `fix: load book categories in a single query`, `fix: keep book categories when updating a book`, `feat: store the loan request date`, `docs: update project notes for the review fixes`; después, en la rama `chore/untrack-coverage`, `chore: stop tracking coverage data`.
 - Pendiente: `docs/DER.jpg` sigue mostrando el esquema `0001` (`docs/er.md` sí está al día).
 
 ## Convenciones
