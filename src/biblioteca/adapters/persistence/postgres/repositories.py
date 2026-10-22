@@ -1,13 +1,16 @@
 """Repositorios relacionales sobre Postgres (implementación por defecto)."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from uuid import UUID
 
 from sqlalchemy import delete, insert, select, update
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from biblioteca.adapters.persistence.postgres import tables as t
+from biblioteca.application.errors import ConflictError
 from biblioteca.domain.entities import (
     Book,
     Category,
@@ -26,6 +29,23 @@ from biblioteca.domain.ports import (
     UnitOfWork,
     UserRepository,
 )
+
+UNIQUE_VIOLATION = "23505"
+
+
+@contextmanager
+def _unique(message: str) -> Iterator[None]:
+    """Traduce un choque con una restricción única al ConflictError de los casos de uso.
+
+    Los casos de uso revisan los duplicados antes de insertar, pero dos peticiones
+    simultáneas pueden pasar esa revisión a la vez: entonces la base frena la segunda.
+    """
+    try:
+        yield
+    except IntegrityError as error:
+        if getattr(error.orig, "sqlstate", None) == UNIQUE_VIOLATION:
+            raise ConflictError(message) from error
+        raise
 
 
 class PostgresRoleRepository(RoleRepository):
@@ -51,7 +71,8 @@ class PostgresUserRepository(UserRepository):
         self.session = session
 
     def add(self, user: User) -> None:
-        self.session.execute(insert(t.users).values(**self._columns(user)))
+        with _unique(f"Ya existe un usuario con el email {user.email}"):
+            self.session.execute(insert(t.users).values(**self._columns(user)))
 
     def get(self, user_id: UUID) -> User | None:
         return self._one(t.users.c.id == user_id)
@@ -60,9 +81,10 @@ class PostgresUserRepository(UserRepository):
         return self._one(t.users.c.email == email)
 
     def update(self, user: User) -> None:
-        self.session.execute(
-            update(t.users).where(t.users.c.id == user.id).values(**self._columns(user))
-        )
+        with _unique(f"Ya existe un usuario con el email {user.email}"):
+            self.session.execute(
+                update(t.users).where(t.users.c.id == user.id).values(**self._columns(user))
+            )
 
     def list(self, role_ids: Iterable[UUID] | None = None) -> list[User]:
         query = select(t.users).order_by(t.users.c.email)
@@ -102,7 +124,10 @@ class PostgresCategoryRepository(CategoryRepository):
         self.session = session
 
     def add(self, category: Category) -> None:
-        self.session.execute(insert(t.categories).values(id=category.id, name=category.name))
+        with _unique(f"Ya existe la categoría {category.name}"):
+            self.session.execute(
+                insert(t.categories).values(id=category.id, name=category.name)
+            )
 
     def get(self, category_id: UUID) -> Category | None:
         return self._one(t.categories.c.id == category_id)
@@ -124,7 +149,8 @@ class PostgresBookRepository(BookRepository):
         self.session = session
 
     def add(self, book: Book) -> None:
-        self.session.execute(insert(t.books).values(**self._columns(book)))
+        with _unique(f"Ya existe un libro con el ISBN {book.isbn}"):
+            self.session.execute(insert(t.books).values(**self._columns(book)))
         self._insert_categories(book.id, book.category_ids)
 
     def get(self, book_id: UUID, for_update: bool = False) -> Book | None:
@@ -139,9 +165,10 @@ class PostgresBookRepository(BookRepository):
         return self._to_entity(row) if row else None
 
     def update(self, book: Book) -> None:
-        self.session.execute(
-            update(t.books).where(t.books.c.id == book.id).values(**self._columns(book))
-        )
+        with _unique(f"Ya existe un libro con el ISBN {book.isbn}"):
+            self.session.execute(
+                update(t.books).where(t.books.c.id == book.id).values(**self._columns(book))
+            )
         self.session.execute(delete(t.book_categories).where(t.book_categories.c.book_id == book.id))
         self._insert_categories(book.id, book.category_ids)
 

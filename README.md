@@ -65,7 +65,7 @@ poetry run invoke test     # o: poetry run pytest
 - **Casos de uso** (`tests/application`): son pruebas unitarias con el repositorio en memoria y con mocks (`mock_uow`, `pytest-mock`). No necesitan base de datos.
 - **HTTP** (`tests/http`): usan la app real, pero con el repositorio en memoria inyectado. Cubren el 401, el 403 y los permisos de cada rol.
 - **Contrato de repositorios** (`tests/contract`): las mismas pruebas corren contra el repositorio en memoria y contra Postgres. Eso demuestra que las implementaciones son intercambiables.
-- **Integración** (`tests/integration`): contra Postgres. Dos solicitudes simultáneas por la última copia, y la atomicidad entre un préstamo y su auditoría: si falla la inserción de la auditoría, el cambio del préstamo se revierte.
+- **Integración** (`tests/integration`): contra Postgres. Dos solicitudes simultáneas por la última copia, dos peticiones simultáneas que crean el mismo email, categoría o ISBN (la segunda responde 409), y la atomicidad entre un préstamo y su auditoría: si falla la inserción de la auditoría, el cambio del préstamo se revierte.
 
 Las pruebas nuevas siguen el patrón **AAA** (Arrange, Act, Assert), marcado con comentarios.
 
@@ -159,6 +159,7 @@ REJECTED           OVERDUE ─────────────────�
 - **Auditoría.** Cada modificación de plazos inserta una fila en `loan_modifications` con el préstamo, quién la hizo, cuándo (UTC), los campos cambiados y sus valores anteriores y nuevos. Se escribe en la misma transacción que el préstamo, así que o se guardan los dos o ninguno. La API no permite editar ni borrar estos registros.
 - **Bajas lógicas.** `DELETE /users/...` pone `active = false`: la cuenta no puede iniciar sesión y sus tokens dejan de valer. Préstamos y auditoría se conservan. Se niega con 409 si la cuenta tiene préstamos abiertos.
 - **Modificar un libro**: cambiar `total_copies` mueve `available_copies` en la misma cantidad y no puede bajar por debajo de los ejemplares que están fuera (409).
+- **Duplicados simultáneos.** Si dos peticiones crean a la vez el mismo email, categoría o ISBN, la base frena la segunda y la API responde 409, igual que con un duplicado normal.
 
 Códigos de error: 401 (sin credenciales válidas), 403 (rol sin acceso o recurso
 ajeno), 404 (no existe), 409 (conflicto o regla de negocio), 422 (entrada inválida).
