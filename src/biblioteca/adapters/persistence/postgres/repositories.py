@@ -168,8 +168,19 @@ class PostgresBookRepository(BookRepository):
             self.session.execute(
                 update(t.books).where(t.books.c.id == book.id).values(**self._columns(book))
             )
-        self.session.execute(delete(t.book_categories).where(t.book_categories.c.book_id == book.id))
-        self._insert_categories(book.id, book.category_ids)
+        # Solo se tocan las categorías que cambiaron: actualizar las copias no las reescribe.
+        pivot = t.book_categories.c
+        stored = set(
+            self.session.scalars(select(pivot.category_id).where(pivot.book_id == book.id))
+        )
+        removed = stored - book.category_ids
+        if removed:
+            self.session.execute(
+                delete(t.book_categories).where(
+                    pivot.book_id == book.id, pivot.category_id.in_(list(removed))
+                )
+            )
+        self._insert_categories(book.id, book.category_ids - stored)
 
     def list_by_category(self, category_id: UUID) -> list[Book]:
         query = (
