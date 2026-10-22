@@ -16,14 +16,15 @@ La bitácora y las historias de usuario están en `~/Downloads/Bitacora-Bibliote
 poetry install
 poetry run invoke up      # Postgres (Docker) + migraciones + seed + API en 127.0.0.1:8000
 poetry run invoke test    # pytest; las pruebas de Postgres se omiten si la BD no está arriba
-poetry run invoke db | migrate | seed | down
+poetry run invoke env | db | migrate | seed | down
 ```
 
 - Swagger: http://127.0.0.1:8000/docs (botón *Authorize* con el JWT de `/auth/login`).
 - Postgres corre en Docker en el puerto **15432** (contenedor `biblioteca-db-1`, usuario, clave y BD `biblioteca`).
   Las pruebas usan otra base, `biblioteca_test`.
 - Consultar datos: `docker exec biblioteca-db-1 psql -U biblioteca -d biblioteca -c "…"`.
-- Cuentas del seed: `admin@example.com` / `administrador123` y `bibliotecario@example.com` / `bibliotecario123`.
+- Cuentas del seed: `admin@example.com` y `bibliotecario@example.com`; sus claves son `ADMIN_PASSWORD` y `LIBRARIAN_PASSWORD` del `.env`. El seed no cambia la clave de una cuenta que ya existe.
+- **Secretos sin valor por defecto** (`JWT_SECRET`, `LIBRARIAN_PASSWORD`, `ADMIN_PASSWORD`): si faltan, `create_app()` lanza `ConfigurationError` y la app no arranca. `invoke env` crea el `.env` (ignorado por git) con valores aleatorios; las pruebas los fijan al inicio de `tests/conftest.py`. Nunca escribas claves reales en el código, el README ni este archivo.
 - Migraciones: `0001` (esquema inicial) y `0002` (rol admin, `users.active`, `loan_modifications`).
   `alembic check` confirma que `tables.py` y las migraciones coinciden. Toda tabla nueva va
   también en `DATA_TABLES` de `tests/conftest.py`.
@@ -141,14 +142,15 @@ REJECTED          OVERDUE ──────────────────
 
 ## Avance
 
-Roadmap original completo (16 commits). Después se implementó `implementar.md` (rol admin,
-gestión de cuentas, edición de libros, plazos de préstamos con auditoría), todavía **sin
-commit**; la suite queda en 307 pruebas pasando. Commits del roadmap:
+21 commits en `main`, todos subidos: el roadmap original (16) y la fase 5 de `implementar.md`
+(5). La suite queda en 307 pruebas pasando. Commits del roadmap:
 - Fase 1, base: `chore: add project base with poetry`, `feat: add health route`.
 - Fase 2, dominio y datos: `feat: add domain entities`, `feat: add repository ports`, `feat: add postgres repositories and schema`, `feat: add in memory repositories`.
 - Fase 3, seguridad: `feat: add jwt authentication`, `feat: add global role validators`.
 - Fase 4, casos de uso: `feat: add catalog management use case`, `feat: add book search by category use case`, `feat: add borrow book use case`, `feat: add return book use case`, `feat: add list loans use case`, `feat: add librarian loan management use case`.
 - Cierre: `docs: add readme and er diagram`, `refactor: move backend files to repository root` (ya no existe la carpeta `Backend/`).
+- Fase 5, admin, cuentas y auditoría: `feat: add admin role and loan audit persistence`, `feat: add account management use cases`, `feat: add book update use case`, `feat: add loan terms modification with audit`, `docs: document admin role, accounts and loan audit`.
+- Pendiente: `docs/DER.jpg` sigue mostrando el esquema `0001` (`docs/er.md` sí está al día).
 
 ## Convenciones
 

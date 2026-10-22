@@ -5,6 +5,13 @@ si no hay servidor disponible: `invoke db` lo levanta.
 """
 
 import os
+
+# La configuración exige secretos sin valor por defecto; las pruebas usan los suyos.
+# Va antes de importar la app, que valida la configuración al crearse.
+os.environ.setdefault("JWT_SECRET", "secreto-de-pruebas-con-32-bytes-o-mas")
+os.environ.setdefault("LIBRARIAN_PASSWORD", "clave-de-pruebas")
+os.environ.setdefault("ADMIN_PASSWORD", "clave-de-pruebas")
+
 from dataclasses import dataclass
 from uuid import uuid4
 

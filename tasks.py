@@ -1,7 +1,29 @@
+import secrets
+from pathlib import Path
+
 from invoke import task
+
+# Variables sin valor por defecto en config.py: se generan al azar al crear el .env.
+GENERATED_SECRETS = ("JWT_SECRET", "LIBRARIAN_PASSWORD", "ADMIN_PASSWORD")
 
 
 @task
+def env(c):
+    """Crea el .env a partir de .env.example con secretos aleatorios, si no existe."""
+    target = Path(".env")
+    if target.exists():
+        return
+    lines = []
+    for line in Path(".env.example").read_text(encoding="utf-8").splitlines():
+        name, sep, value = line.partition("=")
+        if sep and name in GENERATED_SECRETS and not value:
+            line = f"{name}={secrets.token_urlsafe(32)}"
+        lines.append(line)
+    target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(".env creado; las claves de las cuentas iniciales están ahí")
+
+
+@task(pre=[env])
 def db(c):
     """Levanta Postgres y espera a que acepte conexiones."""
     c.run("docker compose up -d --wait db")

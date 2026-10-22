@@ -17,7 +17,7 @@ Stack: Python 3.12+, Poetry, FastAPI, SQLAlchemy 2 con Postgres 17, Alembic, JWT
 ```bash
 cd PruebaDeAuxiliar-Backend
 poetry install
-cp .env.example .env   # opcional: los valores por defecto ya sirven en local
+poetry run invoke env   # crea el .env con secretos aleatorios (invoke up también lo hace)
 ```
 
 ## Levantar
@@ -27,15 +27,17 @@ poetry run invoke up
 ```
 
 Esa única tarea hace todo lo siguiente:
-1. Levanta Postgres con Docker y espera a que esté listo.
-2. Aplica las migraciones, que incluyen los roles base.
-3. Crea el administrador y el bibliotecario iniciales si todavía no existen.
-4. Arranca la API en http://127.0.0.1:8000.
+1. Crea el `.env` desde `.env.example` si no existe, con `JWT_SECRET` y las claves iniciales generadas al azar.
+2. Levanta Postgres con Docker y espera a que esté listo.
+3. Aplica las migraciones, que incluyen los roles base.
+4. Crea el administrador y el bibliotecario iniciales si todavía no existen.
+5. Arranca la API en http://127.0.0.1:8000.
 
 - `GET /` responde `200 {"status": "ok"}`.
 - La documentación interactiva está en http://127.0.0.1:8000/docs. El botón *Authorize* acepta el token.
-- Administrador inicial: `admin@example.com` / `administrador123`. Se cambia con `ADMIN_EMAIL` y `ADMIN_PASSWORD`.
-- Bibliotecario inicial: `bibliotecario@example.com` / `bibliotecario123`. Se cambia con `LIBRARIAN_EMAIL` y `LIBRARIAN_PASSWORD`.
+- Administrador inicial: `admin@example.com`, con la clave de `ADMIN_PASSWORD` en tu `.env`.
+- Bibliotecario inicial: `bibliotecario@example.com`, con la clave de `LIBRARIAN_PASSWORD` en tu `.env`.
+- Los secretos no tienen valor por defecto en el código: si falta alguno, la API no arranca y dice cuál.
 
 ### Migraciones
 
@@ -172,10 +174,12 @@ Está en [`docs/DER.jpg`](docs/DER.jpg), y en [`docs/er.md`](docs/er.md) en vers
 | `DATABASE_URL` | `postgresql+psycopg://biblioteca:biblioteca@localhost:15432/biblioteca` |
 | `TEST_DATABASE_URL` | la misma, con la base `biblioteca_test` |
 | `DB_PORT` | `15432` (puerto publicado por Docker) |
-| `JWT_SECRET` | un valor de desarrollo: **cámbialo**, con al menos 32 bytes |
+| `JWT_SECRET` | **obligatoria**, sin valor por defecto; al menos 32 caracteres |
 | `JWT_ALGORITHM` / `JWT_EXPIRES_MINUTES` | `HS256` / `60` |
 | `LOAN_DAYS` | `14` |
-| `LIBRARIAN_NAME` / `LIBRARIAN_EMAIL` / `LIBRARIAN_PASSWORD` | bibliotecario inicial |
-| `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | administrador inicial |
+| `LIBRARIAN_NAME` / `LIBRARIAN_EMAIL` | bibliotecario inicial (`Bibliotecario` / `bibliotecario@example.com`) |
+| `LIBRARIAN_PASSWORD` | **obligatoria**, sin valor por defecto; al menos 8 caracteres |
+| `ADMIN_NAME` / `ADMIN_EMAIL` | administrador inicial (`Administrador` / `admin@example.com`) |
+| `ADMIN_PASSWORD` | **obligatoria**, sin valor por defecto; al menos 8 caracteres |
 
 Fuera de alcance: interfaz gráfica y despliegue.
