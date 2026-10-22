@@ -6,7 +6,6 @@ from biblioteca.application.catalog import CreateBook, CreateCategory
 from biblioteca.application.errors import NotFoundError
 from biblioteca.application.search import SearchBooksByCategory
 from biblioteca.domain.entities import Category
-from biblioteca.domain.ports import BookRepository, CategoryRepository, UnitOfWork
 
 
 @pytest.fixture
@@ -41,14 +40,10 @@ def test_unknown_category_fails(memory_uow):
         SearchBooksByCategory(memory_uow).execute(uuid4())
 
 
-def test_search_asks_the_repository_for_that_category(mocker):
+def test_search_asks_the_repository_for_that_category(mock_uow):
     category = Category("Novela")
-    uow = mocker.MagicMock(spec=UnitOfWork)
-    uow.categories = mocker.Mock(spec=CategoryRepository)
-    uow.categories.get.return_value = category
-    uow.books = mocker.Mock(spec=BookRepository)
-    uow.__enter__.return_value = uow
+    mock_uow.categories.get.return_value = category
 
-    SearchBooksByCategory(uow).execute(category.id)
+    SearchBooksByCategory(mock_uow).execute(category.id)
 
-    uow.books.list_by_category.assert_called_once_with(category.id)
+    mock_uow.books.list_by_category.assert_called_once_with(category.id)

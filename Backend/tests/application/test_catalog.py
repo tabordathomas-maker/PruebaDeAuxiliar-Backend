@@ -9,7 +9,6 @@ from biblioteca.application.catalog import (
     ListCategories,
 )
 from biblioteca.application.errors import BusinessRuleError, ConflictError, NotFoundError
-from biblioteca.domain.ports import UnitOfWork
 
 
 def test_create_category_trims_and_stores_it(memory_uow):
@@ -43,13 +42,11 @@ def test_create_book_rejects_duplicate_isbn(memory_uow):
         CreateBook(memory_uow).execute("Otro", "Otra", " 978-1 ", 1)
 
 
-def test_create_book_requires_at_least_one_copy(mocker):
-    uow = mocker.MagicMock(spec=UnitOfWork)
-
+def test_create_book_requires_at_least_one_copy(mock_uow):
     with pytest.raises(BusinessRuleError):
-        CreateBook(uow).execute("Rayuela", "Cortázar", "978-1", 0)
+        CreateBook(mock_uow).execute("Rayuela", "Cortázar", "978-1", 0)
 
-    uow.commit.assert_not_called()
+    mock_uow.commit.assert_not_called()
 
 
 def test_create_book_rejects_unknown_categories(memory_uow):
