@@ -15,7 +15,7 @@ Stack: Python 3.12+, Poetry, FastAPI, SQLAlchemy 2 con Postgres 17, Alembic, JWT
 ## Instalar
 
 ```bash
-cd Backend
+cd PruebaDeAuxiliar-Backend
 poetry install
 cp .env.example .env   # opcional: los valores por defecto ya sirven en local
 ```
