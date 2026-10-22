@@ -20,9 +20,7 @@ class RegisterUser:
         self.uow = uow
         self.hasher = hasher
 
-    def execute(
-        self, name: str, email: str, password: str, role: RoleName = RoleName.USER
-    ) -> User:
+    def execute(self, name: str, email: str, password: str, role: RoleName = RoleName.USER) -> User:
         name = required_text(name, "El nombre")
         email = normalize_email(email)
         with self.uow:

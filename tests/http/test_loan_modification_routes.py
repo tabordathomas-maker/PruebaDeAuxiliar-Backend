@@ -37,9 +37,7 @@ def test_admin_and_librarian_change_the_due_date_and_it_is_audited(
     # Assert
     assert response.status_code == 200
     assert datetime.fromisoformat(response.json()["due_at"]) == datetime.fromisoformat(new_due)
-    [audit] = client.get(
-        f"/loans/{active_loan['id']}/modifications", headers=actor.headers
-    ).json()
+    [audit] = client.get(f"/loans/{active_loan['id']}/modifications", headers=actor.headers).json()
     assert audit["loan_id"] == active_loan["id"]
     assert audit["modified_by"] == str(actor.user.id)
     assert audit["changed_fields"] == ["due_at"]

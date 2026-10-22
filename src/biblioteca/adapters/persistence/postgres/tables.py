@@ -67,9 +67,7 @@ book_categories = Table(
     "book_categories",
     metadata,
     Column("book_id", Uuid, ForeignKey("books.id", ondelete="CASCADE"), primary_key=True),
-    Column(
-        "category_id", Uuid, ForeignKey("categories.id", ondelete="CASCADE"), primary_key=True
-    ),
+    Column("category_id", Uuid, ForeignKey("categories.id", ondelete="CASCADE"), primary_key=True),
 )
 
 loans = Table(

@@ -54,6 +54,13 @@ def test(c):
 
 
 @task
+def lint(c):
+    """Revisa el estilo y el formato del código con ruff."""
+    c.run("ruff check .")
+    c.run("ruff format --check .")
+
+
+@task
 def down(c):
     """Detiene los contenedores."""
     c.run("docker compose down")

@@ -48,9 +48,7 @@ def test_register_rejects_duplicate_email_ignoring_case(memory_uow, mock_hasher)
         register.execute("Otra Ana", "ANA@example.com", "secreto456")
 
 
-def test_login_issues_token_with_role_read_from_roles_table(
-    memory_uow, hasher, mock_tokens
-):
+def test_login_issues_token_with_role_read_from_roles_table(memory_uow, hasher, mock_tokens):
     user = RegisterUser(memory_uow, hasher).execute("Ana", "ana@example.com", "secreto123")
 
     token = Login(memory_uow, hasher, mock_tokens).execute("ana@example.com", "secreto123")

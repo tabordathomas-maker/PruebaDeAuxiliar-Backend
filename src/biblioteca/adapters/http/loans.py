@@ -54,7 +54,7 @@ def list_all_loans(
     principal: Principal = Depends(current_principal),
     uow: UnitOfWork = Depends(get_uow),
 ):
-    return [LoanResponse.of(l) for l in ListLoans(uow).execute(principal, status, user_id)]
+    return [LoanResponse.of(loan) for loan in ListLoans(uow).execute(principal, status, user_id)]
 
 
 @router.get("/me", response_model=list[LoanResponse])
@@ -64,7 +64,7 @@ def list_my_loans(
     principal: Principal = Depends(current_principal),
     uow: UnitOfWork = Depends(get_uow),
 ):
-    return [LoanResponse.of(l) for l in ListLoans(uow).execute(principal, status)]
+    return [LoanResponse.of(loan) for loan in ListLoans(uow).execute(principal, status)]
 
 
 @router.post("", status_code=201, response_model=LoanResponse)

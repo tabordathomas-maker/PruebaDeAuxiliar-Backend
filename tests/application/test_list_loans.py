@@ -26,7 +26,11 @@ def loans(memory_uow, create_account):
         "ana": Principal(ana.user.id, RoleName.USER),
         "luis": Principal(luis.user.id, RoleName.USER),
         "librarian": Principal(uuid4(), RoleName.LIBRARIAN),
-        "ids": {"ana_pending": ana_pending.id, "ana_active": ana_active.id, "luis": luis_pending.id},
+        "ids": {
+            "ana_pending": ana_pending.id,
+            "ana_active": ana_active.id,
+            "luis": luis_pending.id,
+        },
     }
 
 
