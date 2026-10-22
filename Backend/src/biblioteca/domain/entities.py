@@ -24,6 +24,14 @@ class LoanStatus(StrEnum):
     REJECTED = "rejected"
 
 
+@dataclass(frozen=True)
+class Principal:
+    """Quién hace la petición, tal como lo acredita el token."""
+
+    user_id: UUID
+    role: str
+
+
 @dataclass
 class Role:
     name: str

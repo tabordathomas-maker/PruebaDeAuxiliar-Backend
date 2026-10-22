@@ -1,0 +1,55 @@
+"""Fixtures compartidos: repositorios en memoria y servicios de seguridad de prueba."""
+
+import pytest
+from fastapi.testclient import TestClient
+
+from biblioteca.adapters.http.dependencies import get_hasher, get_token_service, get_uow
+from biblioteca.adapters.persistence.memory import InMemoryStore, InMemoryUnitOfWork
+from biblioteca.adapters.security.jwt_tokens import JwtTokenService
+from biblioteca.domain.ports import PasswordHasher
+from biblioteca.main import create_app
+
+
+class PlainHasher(PasswordHasher):
+    """Hasher trivial para que las pruebas no paguen el coste de bcrypt."""
+
+    def hash(self, password: str) -> str:
+        return f"hashed:{password}"
+
+    def verify(self, password: str, password_hash: str) -> bool:
+        return password_hash == f"hashed:{password}"
+
+
+@pytest.fixture
+def store() -> InMemoryStore:
+    return InMemoryStore()
+
+
+@pytest.fixture
+def memory_uow(store) -> InMemoryUnitOfWork:
+    return InMemoryUnitOfWork(store)
+
+
+@pytest.fixture
+def hasher() -> PasswordHasher:
+    return PlainHasher()
+
+
+@pytest.fixture
+def token_service() -> JwtTokenService:
+    return JwtTokenService("secreto-de-pruebas-con-32-bytes-o-mas", expires_minutes=5)
+
+
+@pytest.fixture
+def app(store, hasher, token_service):
+    """La app real con el repositorio en memoria inyectado en lugar de Postgres."""
+    app = create_app()
+    app.dependency_overrides[get_uow] = lambda: InMemoryUnitOfWork(store)
+    app.dependency_overrides[get_hasher] = lambda: hasher
+    app.dependency_overrides[get_token_service] = lambda: token_service
+    return app
+
+
+@pytest.fixture
+def client(app) -> TestClient:
+    return TestClient(app)

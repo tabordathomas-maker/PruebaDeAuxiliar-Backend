@@ -6,7 +6,7 @@ una copia del almacén y solo la publica al confirmar, igual que una transacció
 
 from collections.abc import Iterable
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from biblioteca.domain.entities import Book, Category, Loan, LoanStatus, Role, RoleName, User
@@ -114,7 +114,10 @@ class InMemoryUnitOfWork(UnitOfWork):
         return self
 
     def commit(self) -> None:
-        self.store = self._working
+        # Se muta el almacén en lugar de reemplazarlo: otras unidades de trabajo
+        # que lo comparten (una por petición HTTP) ven los cambios.
+        for item in fields(InMemoryStore):
+            setattr(self.store, item.name, getattr(self._working, item.name))
         self.committed = True
         self._begin()
 

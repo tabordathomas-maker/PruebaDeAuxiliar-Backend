@@ -1,14 +1,15 @@
-"""Puertos de persistencia (patrón repositorio).
+"""Puertos del dominio.
 
-Los casos de uso dependen solo de estas interfaces. Las implementaciones viven
-en adapters/persistence: Postgres por defecto y una en memoria para las pruebas.
+Los casos de uso dependen solo de estas interfaces. Las de persistencia siguen el
+patrón repositorio y viven en adapters/persistence: Postgres por defecto y una en
+memoria para las pruebas. Las de seguridad viven en adapters/security.
 """
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from uuid import UUID
 
-from biblioteca.domain.entities import Book, Category, Loan, LoanStatus, Role, User
+from biblioteca.domain.entities import Book, Category, Loan, LoanStatus, Principal, Role, User
 
 
 class RoleRepository(ABC):
@@ -107,3 +108,20 @@ class UnitOfWork(ABC):
 
     @abstractmethod
     def rollback(self) -> None: ...
+
+
+class PasswordHasher(ABC):
+    @abstractmethod
+    def hash(self, password: str) -> str: ...
+
+    @abstractmethod
+    def verify(self, password: str, password_hash: str) -> bool: ...
+
+
+class TokenService(ABC):
+    @abstractmethod
+    def issue(self, principal: Principal) -> str: ...
+
+    @abstractmethod
+    def decode(self, token: str) -> Principal:
+        """Devuelve el principal del token o lanza InvalidTokenError."""

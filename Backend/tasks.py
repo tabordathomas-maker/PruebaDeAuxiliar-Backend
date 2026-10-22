@@ -14,6 +14,12 @@ def migrate(c):
 
 
 @task(pre=[migrate])
+def seed(c):
+    """Crea el bibliotecario inicial si no existe."""
+    c.run("python -m biblioteca.seed")
+
+
+@task(pre=[seed])
 def up(c, host="127.0.0.1", port=8000):
     """Levanta toda la aplicación: base de datos y servidor HTTP."""
     c.run(f"uvicorn biblioteca.main:app --app-dir src --host {host} --port {port}")

@@ -13,7 +13,6 @@ from alembic.config import Config
 from sqlalchemy import create_engine, make_url, text
 from sqlalchemy.exc import OperationalError
 
-from biblioteca.adapters.persistence.memory import InMemoryUnitOfWork
 from biblioteca.adapters.persistence.postgres.repositories import (
     PostgresUnitOfWork,
     build_session_factory,
@@ -63,11 +62,6 @@ def postgres_uow(postgres_engine):
     with postgres_engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {DATA_TABLES} CASCADE"))
     return PostgresUnitOfWork(build_session_factory(postgres_engine))
-
-
-@pytest.fixture
-def memory_uow():
-    return InMemoryUnitOfWork()
 
 
 @pytest.fixture(params=["memory", "postgres"])
