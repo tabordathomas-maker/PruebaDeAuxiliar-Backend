@@ -15,5 +15,22 @@ services:
       timeout: 3s
       retries: 30
 
+  api:
+    build: .
+    # Los secretos (JWT_SECRET y las claves iniciales) vienen del .env: `invoke env` lo crea.
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://biblioteca:biblioteca@db:5432/biblioteca
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
 volumes:
   pgdata:
