@@ -8,6 +8,7 @@ from biblioteca.application.errors import (
     ConflictError,
     NotFoundError,
     StockError,
+    required_text,
 )
 from biblioteca.domain.entities import Book, Category
 from biblioteca.domain.ports import UnitOfWork
@@ -24,7 +25,7 @@ class CreateCategory:
         self.uow = uow
 
     def execute(self, name: str) -> Category:
-        name = name.strip()
+        name = required_text(name, "El nombre de la categoría")
         with self.uow:
             if self.uow.categories.get_by_name(name) is not None:
                 raise ConflictError(f"Ya existe la categoría {name}")
@@ -55,9 +56,11 @@ class CreateBook:
         total_copies: int,
         category_ids: Iterable[UUID] = (),
     ) -> Book:
+        title = required_text(title, "El título")
+        author = required_text(author, "El autor")
+        isbn = required_text(isbn, "El ISBN")
         if total_copies < 1:
             raise BusinessRuleError("Un libro debe tener al menos un ejemplar")
-        isbn = isbn.strip()
         category_ids = set(category_ids)
         with self.uow:
             if self.uow.books.get_by_isbn(isbn) is not None:
@@ -66,8 +69,8 @@ class CreateBook:
 
             # Un libro nuevo tiene todos sus ejemplares disponibles.
             book = Book(
-                title=title.strip(),
-                author=author.strip(),
+                title=title,
+                author=author,
                 isbn=isbn,
                 total_copies=total_copies,
                 available_copies=total_copies,
@@ -102,11 +105,11 @@ class UpdateBook:
             if book is None:
                 raise NotFoundError("El libro no existe")
             if title is not None:
-                book.title = title.strip()
+                book.title = required_text(title, "El título")
             if author is not None:
-                book.author = author.strip()
+                book.author = required_text(author, "El autor")
             if isbn is not None:
-                isbn = isbn.strip()
+                isbn = required_text(isbn, "El ISBN")
                 owner = self.uow.books.get_by_isbn(isbn)
                 if owner is not None and owner.id != book.id:
                     raise ConflictError(f"Ya existe un libro con el ISBN {isbn}")
