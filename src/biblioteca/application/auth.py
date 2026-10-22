@@ -5,6 +5,7 @@ from biblioteca.application.errors import (
     InvalidCredentialsError,
     InvalidTokenError,
     NotFoundError,
+    required_text,
 )
 from biblioteca.domain.entities import Principal, RoleName, User
 from biblioteca.domain.ports import PasswordHasher, TokenService, UnitOfWork
@@ -22,6 +23,7 @@ class RegisterUser:
     def execute(
         self, name: str, email: str, password: str, role: RoleName = RoleName.USER
     ) -> User:
+        name = required_text(name, "El nombre")
         email = normalize_email(email)
         with self.uow:
             if self.uow.users.get_by_email(email) is not None:
@@ -31,7 +33,7 @@ class RegisterUser:
                 raise NotFoundError(f"No existe el rol {role}")
 
             user = User(
-                name=name.strip(),
+                name=name,
                 email=email,
                 password_hash=self.hasher.hash(password),
                 role_id=stored_role.id,

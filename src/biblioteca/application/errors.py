@@ -9,6 +9,10 @@ class NotFoundError(ApplicationError):
     pass
 
 
+class InvalidInputError(ApplicationError):
+    """Un dato no es válido aunque tenga el formato correcto (por ejemplo, un texto en blanco)."""
+
+
 class ConflictError(ApplicationError):
     """El recurso ya existe."""
 
@@ -31,3 +35,11 @@ class InvalidTokenError(ApplicationError):
 
 class ForbiddenError(ApplicationError):
     """El usuario está autenticado pero no puede actuar sobre ese recurso."""
+
+
+def required_text(value: str, label: str) -> str:
+    """Quita los espacios de los extremos y rechaza el texto que queda vacío."""
+    text = value.strip()
+    if not text:
+        raise InvalidInputError(f"{label} no puede estar en blanco")
+    return text

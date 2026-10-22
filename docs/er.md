@@ -1,7 +1,7 @@
 # Modelo entidad-relación
 
 La imagen original está en [`DER.jpg`](DER.jpg) y refleja el esquema inicial (`0001`).
-Esta versión en Mermaid está al día, incluida la migración `0002`, y se puede versionar
+Esta versión en Mermaid está al día, incluidas las migraciones `0002` y `0003`, y se puede versionar
 y comparar en los diffs. El esquema real está en `migrations/versions/`.
 
 ```mermaid
@@ -46,6 +46,7 @@ erDiagram
         uuid id PK
         uuid user_id FK "indexado"
         uuid book_id FK "indexado"
+        timestamptz requested_at "al solicitar"
         timestamptz loaned_at
         timestamptz due_at
         timestamptz returned_at

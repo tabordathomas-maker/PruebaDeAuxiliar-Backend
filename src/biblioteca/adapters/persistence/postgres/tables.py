@@ -82,6 +82,7 @@ loans = Table(
     Column(
         "book_id", Uuid, ForeignKey("books.id", ondelete="RESTRICT"), nullable=False, index=True
     ),
+    Column("requested_at", DateTime(timezone=True), nullable=False),
     Column("loaned_at", DateTime(timezone=True)),
     Column("due_at", DateTime(timezone=True)),
     Column("returned_at", DateTime(timezone=True)),

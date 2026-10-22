@@ -17,7 +17,7 @@ Stack: Python 3.12+, Poetry, FastAPI, SQLAlchemy 2 con Postgres 17, Alembic, JWT
 ```bash
 cd PruebaDeAuxiliar-Backend
 poetry install
-cp .env.example .env   # opcional: los valores por defecto ya sirven en local
+poetry run invoke env   # crea el .env con secretos aleatorios (invoke up también lo hace)
 ```
 
 ## Levantar
@@ -27,15 +27,17 @@ poetry run invoke up
 ```
 
 Esa única tarea hace todo lo siguiente:
-1. Levanta Postgres con Docker y espera a que esté listo.
-2. Aplica las migraciones, que incluyen los roles base.
-3. Crea el administrador y el bibliotecario iniciales si todavía no existen.
-4. Arranca la API en http://127.0.0.1:8000.
+1. Crea el `.env` desde `.env.example` si no existe, con `JWT_SECRET` y las claves iniciales generadas al azar.
+2. Levanta Postgres con Docker y espera a que esté listo.
+3. Aplica las migraciones, que incluyen los roles base.
+4. Crea el administrador y el bibliotecario iniciales si todavía no existen.
+5. Arranca la API en http://127.0.0.1:8000.
 
 - `GET /` responde `200 {"status": "ok"}`.
 - La documentación interactiva está en http://127.0.0.1:8000/docs. El botón *Authorize* acepta el token.
-- Administrador inicial: `admin@example.com` / `administrador123`. Se cambia con `ADMIN_EMAIL` y `ADMIN_PASSWORD`.
-- Bibliotecario inicial: `bibliotecario@example.com` / `bibliotecario123`. Se cambia con `LIBRARIAN_EMAIL` y `LIBRARIAN_PASSWORD`.
+- Administrador inicial: `admin@example.com`, con la clave de `ADMIN_PASSWORD` en tu `.env`.
+- Bibliotecario inicial: `bibliotecario@example.com`, con la clave de `LIBRARIAN_PASSWORD` en tu `.env`.
+- Los secretos no tienen valor por defecto en el código: si falta alguno, la API no arranca y dice cuál.
 
 ### Migraciones
 
@@ -46,8 +48,9 @@ Esa única tarea hace todo lo siguiente:
 |---|---|
 | `0001` | Esquema inicial y roles `librarian` y `user` |
 | `0002` | Rol `admin`, columna `users.active` (las cuentas existentes quedan activas) y tabla `loan_modifications` |
+| `0003` | Columna `loans.requested_at`, la fecha en que se pidió el préstamo. Los préstamos existentes toman su `loaned_at`, o la hora de la migración si siguen pendientes |
 
-Las dos son aditivas. El `downgrade` de `0002` es destructivo: borra la auditoría.
+Las tres son aditivas. El `downgrade` de `0002` es destructivo: borra la auditoría.
 
 > El contenedor publica Postgres en el puerto **15432**, no en el 5432, para no chocar
 > con un Postgres instalado en la máquina. Se cambia con `DB_PORT` y `DATABASE_URL`.
@@ -57,13 +60,17 @@ Otras tareas: `invoke db`, `invoke migrate`, `invoke seed`, `invoke down` (ver `
 ## Probar
 
 ```bash
-poetry run invoke test     # o: poetry run pytest
+poetry run invoke test     # pytest con cobertura; falla si baja del 80 %
 ```
+
+`invoke test` mide la cobertura del paquete `biblioteca` (con ramas) y falla si queda por
+debajo del 80 % (`fail_under` en `pyproject.toml`). `poetry run pytest` corre las pruebas
+sin medirla, útil para lanzar un solo archivo.
 
 - **Casos de uso** (`tests/application`): son pruebas unitarias con el repositorio en memoria y con mocks (`mock_uow`, `pytest-mock`). No necesitan base de datos.
 - **HTTP** (`tests/http`): usan la app real, pero con el repositorio en memoria inyectado. Cubren el 401, el 403 y los permisos de cada rol.
 - **Contrato de repositorios** (`tests/contract`): las mismas pruebas corren contra el repositorio en memoria y contra Postgres. Eso demuestra que las implementaciones son intercambiables.
-- **Integración** (`tests/integration`): contra Postgres. Dos solicitudes simultáneas por la última copia, y la atomicidad entre un préstamo y su auditoría: si falla la inserción de la auditoría, el cambio del préstamo se revierte.
+- **Integración** (`tests/integration`): contra Postgres. Dos solicitudes simultáneas por la última copia, dos peticiones simultáneas que crean el mismo email, categoría o ISBN (la segunda responde 409), y la atomicidad entre un préstamo y su auditoría: si falla la inserción de la auditoría, el cambio del préstamo se revierte.
 
 Las pruebas nuevas siguen el patrón **AAA** (Arrange, Act, Assert), marcado con comentarios.
 
@@ -147,7 +154,7 @@ PENDING ──────────► ACTIVE ──────────�
 REJECTED           OVERDUE ──────────────────────────┘
 ```
 
-- **Al solicitar** se reserva un ejemplar (`available_copies - 1`). Falla con 409 si no quedan copias. El libro se bloquea (`SELECT … FOR UPDATE`), así que dos solicitudes simultáneas no se llevan la misma copia.
+- **Al solicitar** se guarda la fecha de la solicitud (`requested_at`) y se reserva un ejemplar (`available_copies - 1`). Falla con 409 si no quedan copias. El libro se bloquea (`SELECT … FOR UPDATE`), así que dos solicitudes simultáneas no se llevan la misma copia.
 - Un usuario no puede tener dos préstamos abiertos del mismo libro.
 - **Al aprobar** empiezan a correr las fechas: `loaned_at = ahora` y `due_at = ahora + LOAN_DAYS` (14 por defecto). Antes de aprobar se **vuelve a validar el stock**. Si el libro ya no existe o sus copias no cuadran con los préstamos abiertos, la aprobación falla con un error de stock (409).
 - **Cerrar** rechaza un préstamo pendiente o registra la devolución de uno activo o vencido. En ambos casos repone el ejemplar.
@@ -157,6 +164,8 @@ REJECTED           OVERDUE ─────────────────�
 - **Auditoría.** Cada modificación de plazos inserta una fila en `loan_modifications` con el préstamo, quién la hizo, cuándo (UTC), los campos cambiados y sus valores anteriores y nuevos. Se escribe en la misma transacción que el préstamo, así que o se guardan los dos o ninguno. La API no permite editar ni borrar estos registros.
 - **Bajas lógicas.** `DELETE /users/...` pone `active = false`: la cuenta no puede iniciar sesión y sus tokens dejan de valer. Préstamos y auditoría se conservan. Se niega con 409 si la cuenta tiene préstamos abiertos.
 - **Modificar un libro**: cambiar `total_copies` mueve `available_copies` en la misma cantidad y no puede bajar por debajo de los ejemplares que están fuera (409).
+- **Textos obligatorios.** Nombre de categoría, título, autor, ISBN y nombre de usuario se guardan sin espacios en los extremos; si quedan vacíos, responden 422.
+- **Duplicados simultáneos.** Si dos peticiones crean a la vez el mismo email, categoría o ISBN, la base frena la segunda y la API responde 409, igual que con un duplicado normal.
 
 Códigos de error: 401 (sin credenciales válidas), 403 (rol sin acceso o recurso
 ajeno), 404 (no existe), 409 (conflicto o regla de negocio), 422 (entrada inválida).
@@ -172,10 +181,12 @@ Está en [`docs/DER.jpg`](docs/DER.jpg), y en [`docs/er.md`](docs/er.md) en vers
 | `DATABASE_URL` | `postgresql+psycopg://biblioteca:biblioteca@localhost:15432/biblioteca` |
 | `TEST_DATABASE_URL` | la misma, con la base `biblioteca_test` |
 | `DB_PORT` | `15432` (puerto publicado por Docker) |
-| `JWT_SECRET` | un valor de desarrollo: **cámbialo**, con al menos 32 bytes |
+| `JWT_SECRET` | **obligatoria**, sin valor por defecto; al menos 32 caracteres |
 | `JWT_ALGORITHM` / `JWT_EXPIRES_MINUTES` | `HS256` / `60` |
 | `LOAN_DAYS` | `14` |
-| `LIBRARIAN_NAME` / `LIBRARIAN_EMAIL` / `LIBRARIAN_PASSWORD` | bibliotecario inicial |
-| `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | administrador inicial |
+| `LIBRARIAN_NAME` / `LIBRARIAN_EMAIL` | bibliotecario inicial (`Bibliotecario` / `bibliotecario@example.com`) |
+| `LIBRARIAN_PASSWORD` | **obligatoria**, sin valor por defecto; al menos 8 caracteres |
+| `ADMIN_NAME` / `ADMIN_EMAIL` | administrador inicial (`Administrador` / `admin@example.com`) |
+| `ADMIN_PASSWORD` | **obligatoria**, sin valor por defecto; al menos 8 caracteres |
 
 Fuera de alcance: interfaz gráfica y despliegue.

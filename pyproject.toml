@@ -24,12 +24,23 @@ pytest = ">=8.3"
 pytest-mock = ">=3.14"
 invoke = ">=2.2"
 httpx2 = "^2.16.0"
+pytest-cov = ">=6.0"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-q"
 filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["biblioteca"]
+branch = true
+
+[tool.coverage.report]
+# `invoke test` falla si la cobertura baja de este mínimo.
+fail_under = 80
+show_missing = true
+skip_covered = true
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

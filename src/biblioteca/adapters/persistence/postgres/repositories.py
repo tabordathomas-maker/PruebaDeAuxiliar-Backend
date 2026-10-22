@@ -1,13 +1,16 @@
 """Repositorios relacionales sobre Postgres (implementación por defecto)."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from uuid import UUID
 
 from sqlalchemy import delete, insert, select, update
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from biblioteca.adapters.persistence.postgres import tables as t
+from biblioteca.application.errors import ConflictError
 from biblioteca.domain.entities import (
     Book,
     Category,
@@ -26,6 +29,23 @@ from biblioteca.domain.ports import (
     UnitOfWork,
     UserRepository,
 )
+
+UNIQUE_VIOLATION = "23505"
+
+
+@contextmanager
+def _unique(message: str) -> Iterator[None]:
+    """Traduce un choque con una restricción única al ConflictError de los casos de uso.
+
+    Los casos de uso revisan los duplicados antes de insertar, pero dos peticiones
+    simultáneas pueden pasar esa revisión a la vez: entonces la base frena la segunda.
+    """
+    try:
+        yield
+    except IntegrityError as error:
+        if getattr(error.orig, "sqlstate", None) == UNIQUE_VIOLATION:
+            raise ConflictError(message) from error
+        raise
 
 
 class PostgresRoleRepository(RoleRepository):
@@ -51,7 +71,8 @@ class PostgresUserRepository(UserRepository):
         self.session = session
 
     def add(self, user: User) -> None:
-        self.session.execute(insert(t.users).values(**self._columns(user)))
+        with _unique(f"Ya existe un usuario con el email {user.email}"):
+            self.session.execute(insert(t.users).values(**self._columns(user)))
 
     def get(self, user_id: UUID) -> User | None:
         return self._one(t.users.c.id == user_id)
@@ -60,9 +81,10 @@ class PostgresUserRepository(UserRepository):
         return self._one(t.users.c.email == email)
 
     def update(self, user: User) -> None:
-        self.session.execute(
-            update(t.users).where(t.users.c.id == user.id).values(**self._columns(user))
-        )
+        with _unique(f"Ya existe un usuario con el email {user.email}"):
+            self.session.execute(
+                update(t.users).where(t.users.c.id == user.id).values(**self._columns(user))
+            )
 
     def list(self, role_ids: Iterable[UUID] | None = None) -> list[User]:
         query = select(t.users).order_by(t.users.c.email)
@@ -102,7 +124,10 @@ class PostgresCategoryRepository(CategoryRepository):
         self.session = session
 
     def add(self, category: Category) -> None:
-        self.session.execute(insert(t.categories).values(id=category.id, name=category.name))
+        with _unique(f"Ya existe la categoría {category.name}"):
+            self.session.execute(
+                insert(t.categories).values(id=category.id, name=category.name)
+            )
 
     def get(self, category_id: UUID) -> Category | None:
         return self._one(t.categories.c.id == category_id)
@@ -124,26 +149,38 @@ class PostgresBookRepository(BookRepository):
         self.session = session
 
     def add(self, book: Book) -> None:
-        self.session.execute(insert(t.books).values(**self._columns(book)))
+        with _unique(f"Ya existe un libro con el ISBN {book.isbn}"):
+            self.session.execute(insert(t.books).values(**self._columns(book)))
         self._insert_categories(book.id, book.category_ids)
 
     def get(self, book_id: UUID, for_update: bool = False) -> Book | None:
         query = select(t.books).where(t.books.c.id == book_id)
         if for_update:
             query = query.with_for_update()
-        row = self.session.execute(query).one_or_none()
-        return self._to_entity(row) if row else None
+        return self._one(self.session.execute(query).one_or_none())
 
     def get_by_isbn(self, isbn: str) -> Book | None:
-        row = self.session.execute(select(t.books).where(t.books.c.isbn == isbn)).one_or_none()
-        return self._to_entity(row) if row else None
+        query = select(t.books).where(t.books.c.isbn == isbn)
+        return self._one(self.session.execute(query).one_or_none())
 
     def update(self, book: Book) -> None:
-        self.session.execute(
-            update(t.books).where(t.books.c.id == book.id).values(**self._columns(book))
+        with _unique(f"Ya existe un libro con el ISBN {book.isbn}"):
+            self.session.execute(
+                update(t.books).where(t.books.c.id == book.id).values(**self._columns(book))
+            )
+        # Solo se tocan las categorías que cambiaron: actualizar las copias no las reescribe.
+        pivot = t.book_categories.c
+        stored = set(
+            self.session.scalars(select(pivot.category_id).where(pivot.book_id == book.id))
         )
-        self.session.execute(delete(t.book_categories).where(t.book_categories.c.book_id == book.id))
-        self._insert_categories(book.id, book.category_ids)
+        removed = stored - book.category_ids
+        if removed:
+            self.session.execute(
+                delete(t.book_categories).where(
+                    pivot.book_id == book.id, pivot.category_id.in_(list(removed))
+                )
+            )
+        self._insert_categories(book.id, book.category_ids - stored)
 
     def list_by_category(self, category_id: UUID) -> list[Book]:
         query = (
@@ -152,7 +189,7 @@ class PostgresBookRepository(BookRepository):
             .where(t.book_categories.c.category_id == category_id)
             .order_by(t.books.c.title)
         )
-        return [self._to_entity(row) for row in self.session.execute(query)]
+        return self._to_entities(self.session.execute(query).all())
 
     def _insert_categories(self, book_id: UUID, category_ids: set[UUID]) -> None:
         if category_ids:
@@ -161,19 +198,32 @@ class PostgresBookRepository(BookRepository):
                 [{"book_id": book_id, "category_id": cid} for cid in category_ids],
             )
 
-    def _to_entity(self, row) -> Book:
-        category_ids = self.session.scalars(
-            select(t.book_categories.c.category_id).where(t.book_categories.c.book_id == row.id)
-        )
-        return Book(
-            id=row.id,
-            title=row.title,
-            author=row.author,
-            isbn=row.isbn,
-            total_copies=row.total_copies,
-            available_copies=row.available_copies,
-            category_ids=set(category_ids),
-        )
+    def _one(self, row) -> Book | None:
+        return self._to_entities([row])[0] if row else None
+
+    def _to_entities(self, rows) -> list[Book]:
+        """Trae las categorías de todos los libros en una sola consulta, no una por libro."""
+        category_ids: dict[UUID, set[UUID]] = {row.id: set() for row in rows}
+        if category_ids:
+            pairs = self.session.execute(
+                select(t.book_categories.c.book_id, t.book_categories.c.category_id).where(
+                    t.book_categories.c.book_id.in_(list(category_ids))
+                )
+            )
+            for book_id, category_id in pairs:
+                category_ids[book_id].add(category_id)
+        return [
+            Book(
+                id=row.id,
+                title=row.title,
+                author=row.author,
+                isbn=row.isbn,
+                total_copies=row.total_copies,
+                available_copies=row.available_copies,
+                category_ids=category_ids[row.id],
+            )
+            for row in rows
+        ]
 
     @staticmethod
     def _columns(book: Book) -> dict:
@@ -229,6 +279,7 @@ class PostgresLoanRepository(LoanRepository):
             user_id=row.user_id,
             book_id=row.book_id,
             status=row.status,
+            requested_at=row.requested_at,
             loaned_at=row.loaned_at,
             due_at=row.due_at,
             returned_at=row.returned_at,
@@ -241,6 +292,7 @@ class PostgresLoanRepository(LoanRepository):
             "user_id": loan.user_id,
             "book_id": loan.book_id,
             "status": loan.status,
+            "requested_at": loan.requested_at,
             "loaned_at": loan.loaned_at,
             "due_at": loan.due_at,
             "returned_at": loan.returned_at,

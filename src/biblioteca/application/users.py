@@ -18,6 +18,7 @@ from biblioteca.application.errors import (
     ConflictError,
     ForbiddenError,
     NotFoundError,
+    required_text,
 )
 from biblioteca.application.loans import OPEN_STATUSES
 from biblioteca.domain.entities import Principal, RoleName, User
@@ -136,7 +137,7 @@ class UpdateAccount:
         with self.uow:
             user = _load_target(self.uow, actor, user_id, MANAGEABLE_ROLES)
             if name is not None:
-                user.name = name.strip()
+                user.name = required_text(name, "El nombre")
             if email is not None:
                 email = normalize_email(email)
                 owner = self.uow.users.get_by_email(email)

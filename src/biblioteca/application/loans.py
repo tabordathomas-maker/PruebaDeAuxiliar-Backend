@@ -68,8 +68,9 @@ def _get_loan_for_update(uow: UnitOfWork, loan_id: UUID) -> Loan:
 class BorrowBook:
     """El usuario solicita un libro: queda pendiente de aprobación con un ejemplar reservado."""
 
-    def __init__(self, uow: UnitOfWork) -> None:
+    def __init__(self, uow: UnitOfWork, clock: Clock = utc_now) -> None:
         self.uow = uow
+        self.clock = clock
 
     def execute(self, user_id: UUID, book_id: UUID) -> Loan:
         with self.uow:
@@ -84,7 +85,7 @@ class BorrowBook:
 
             book.available_copies -= 1
             self.uow.books.update(book)
-            loan = Loan(user_id=user_id, book_id=book_id)
+            loan = Loan(user_id=user_id, book_id=book_id, requested_at=self.clock())
             self.uow.loans.add(loan)
             self.uow.commit()
             return loan

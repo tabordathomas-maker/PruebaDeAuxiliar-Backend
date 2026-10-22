@@ -45,6 +45,7 @@ class LoanResponse(BaseModel):
     user_id: UUID
     book_id: UUID
     status: LoanStatus
+    requested_at: datetime
     loaned_at: datetime | None
     due_at: datetime | None
     returned_at: datetime | None
@@ -56,6 +57,7 @@ class LoanResponse(BaseModel):
             user_id=loan.user_id,
             book_id=loan.book_id,
             status=loan.status,
+            requested_at=loan.requested_at,
             loaned_at=loan.loaned_at,
             due_at=loan.due_at,
             returned_at=loan.returned_at,

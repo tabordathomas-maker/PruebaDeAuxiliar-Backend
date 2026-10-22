@@ -2,7 +2,7 @@
 
 Prueba técnica de backend: API REST con arquitectura hexagonal para prestar libros, con tres
 roles (`admin`, `librarian` y `user`). Sin interfaz gráfica ni despliegue (fuera de alcance).
-Repo: github.com/tabordathomas-maker/PruebaDeAuxiliar-Backend, rama `main`.
+Repo: github.com/tabordathomas-maker/PruebaDeAuxiliar-Backend, rama principal `main` (se trabaja en ramas y se integra por PR).
 
 Especificaciones originales (en `~/Downloads`): `BaseDelproyecto.md` (requisitos),
 `CasosDeusoPoRol.md` (casos de uso y roadmap de commits), `reglasdenegocio.txt` (decisiones del
@@ -15,16 +15,17 @@ La bitácora y las historias de usuario están en `~/Downloads/Bitacora-Bibliote
 ```bash
 poetry install
 poetry run invoke up      # Postgres (Docker) + migraciones + seed + API en 127.0.0.1:8000
-poetry run invoke test    # pytest; las pruebas de Postgres se omiten si la BD no está arriba
-poetry run invoke db | migrate | seed | down
+poetry run invoke test    # pytest --cov; falla con cobertura < 80 %. Las pruebas de Postgres se omiten si la BD no está arriba
+poetry run invoke env | db | migrate | seed | down
 ```
 
 - Swagger: http://127.0.0.1:8000/docs (botón *Authorize* con el JWT de `/auth/login`).
 - Postgres corre en Docker en el puerto **15432** (contenedor `biblioteca-db-1`, usuario, clave y BD `biblioteca`).
   Las pruebas usan otra base, `biblioteca_test`.
 - Consultar datos: `docker exec biblioteca-db-1 psql -U biblioteca -d biblioteca -c "…"`.
-- Cuentas del seed: `admin@example.com` / `administrador123` y `bibliotecario@example.com` / `bibliotecario123`.
-- Migraciones: `0001` (esquema inicial) y `0002` (rol admin, `users.active`, `loan_modifications`).
+- Cuentas del seed: `admin@example.com` y `bibliotecario@example.com`; sus claves son `ADMIN_PASSWORD` y `LIBRARIAN_PASSWORD` del `.env`. El seed no cambia la clave de una cuenta que ya existe.
+- **Secretos sin valor por defecto** (`JWT_SECRET`, `LIBRARIAN_PASSWORD`, `ADMIN_PASSWORD`): si faltan, `create_app()` lanza `ConfigurationError` y la app no arranca. `invoke env` crea el `.env` (ignorado por git) con valores aleatorios; las pruebas los fijan al inicio de `tests/conftest.py`. Nunca escribas claves reales en el código, el README ni este archivo.
+- Migraciones: `0001` (esquema inicial), `0002` (rol admin, `users.active`, `loan_modifications`) y `0003` (`loans.requested_at`).
   `alembic check` confirma que `tables.py` y las migraciones coinciden. Toda tabla nueva va
   también en `DATA_TABLES` de `tests/conftest.py`.
 - Para pruebas de humo usa la base `biblioteca_test` (exporta `DATABASE_URL`), no la de desarrollo.
@@ -96,13 +97,13 @@ src/biblioteca/
   config.py              Settings (pydantic-settings, lee .env)
   seed.py                crea el administrador y el bibliotecario iniciales (idempotente)
   main.py                create_app(): registra el validador global y los routers
-migrations/              Alembic: 0001_initial_schema y 0002_admin_role_and_loan_audit
+migrations/              Alembic: 0001_initial_schema, 0002_admin_role_and_loan_audit y 0003_loan_requested_at
 ```
 
 - **Las dependencias apuntan hacia adentro:** `domain` no importa nada del proyecto y `application` solo importa `domain`.
 - **Flujo de una petición:** `global_validator` decodifica el JWT, comprueba el rol de la ruta, verifica la cuenta en la base (`VerifyPrincipal`) y guarda el principal en `request.state.principal` → la ruta obtiene `current_principal` y `get_uow` → el caso de uso abre `with uow:`, usa los repositorios y hace `uow.commit()` → `LoanResponse.of(...)` arma la respuesta.
 - **Rutas privadas por defecto.** Usa `@public` para eximir una ruta y `@roles(RoleName.X)` para exigir un rol. Una prueba recorre todas las rutas, así que toda ruta nueva debe llevar uno de los dos decoradores o quedará privada.
-- **Errores:** los casos de uso lanzan `ApplicationError` y `adapters/http/errors.py` los traduce: `NotFoundError` → 404, `ConflictError` y `BusinessRuleError` (incluye `StockError`) → 409, `InvalidCredentialsError` e `InvalidTokenError` → 401, `ForbiddenError` → 403. La entrada inválida responde 422 (FastAPI).
+- **Errores:** los casos de uso lanzan `ApplicationError` y `adapters/http/errors.py` los traduce: `NotFoundError` → 404, `ConflictError` y `BusinessRuleError` (incluye `StockError`) → 409, `InvalidCredentialsError` e `InvalidTokenError` → 401, `ForbiddenError` → 403, `InvalidInputError` → 422. La entrada inválida responde 422 (FastAPI). Los textos obligatorios pasan por `required_text` (`application/errors.py`), que quita espacios y rechaza el texto vacío.
 - **Inyección:** `adapters/http/dependencies.py`. Las pruebas la sustituyen con `app.dependency_overrides` por el UoW en memoria.
 - **Hora:** los casos de uso de préstamos reciben `clock` (por defecto `utc_now`); las pruebas inyectan una hora fija.
 
@@ -116,13 +117,13 @@ PENDING ─aprobar─► ACTIVE ─devolver/cerrar─► RETURNED
 REJECTED          OVERDUE ──────────────────────┘
 ```
 
-- **Solicitar** (`BorrowBook`): bloquea el libro y falla si el usuario ya tiene un préstamo abierto (`PENDING`, `ACTIVE` u `OVERDUE`) de ese libro o si `available_copies < 1`. Si pasa, resta 1 a `available_copies` y crea el préstamo en `PENDING`. **La copia se reserva al solicitar**, no al aprobar.
+- **Solicitar** (`BorrowBook`): bloquea el libro y falla si el usuario ya tiene un préstamo abierto (`PENDING`, `ACTIVE` u `OVERDUE`) de ese libro o si `available_copies < 1`. Si pasa, resta 1 a `available_copies` y crea el préstamo en `PENDING` con `requested_at = ahora` (recibe `clock`). **La copia se reserva al solicitar**, no al aprobar.
 - **Aprobar** (`ApproveLoan`): solo préstamos `PENDING`. Vuelve a validar el stock: el libro debe existir, los préstamos abiertos no pueden superar `total_copies` y se debe cumplir `available_copies == total_copies - abiertos`; si no, lanza `StockError`. Fija `loaned_at = ahora` y `due_at = ahora + LOAN_DAYS` (14).
 - **Cerrar** (`CloseLoan`): si es `PENDING`, lo pasa a `REJECTED`; si es `ACTIVE` u `OVERDUE`, lo pasa a `RETURNED` con `returned_at`. En los dos casos repone la copia. Desde otro estado responde 409.
 - **Devolver** (`ReturnBook`): el usuario, sobre **su** préstamo `ACTIVE` u `OVERDUE`. Un préstamo ajeno se trata como inexistente (404).
 - **Marcar vencido** (`MarkLoanOverdue`): solo `ACTIVE` con `due_at` ya pasado. Lo hace el bibliotecario a mano; no hay job automático.
 - **Listar** (`ListLoans`): el bibliotecario ve todo; un no bibliotecario queda forzado a su propio `user_id`, y si pide otro recibe `ForbiddenError`.
-- **Catálogo:** nombre de categoría e ISBN únicos (409). Un libro necesita al menos 1 copia y nace con `available = total`. Asignar categorías **suma** a las existentes. Buscar en una categoría inexistente responde 404, no `[]`.
+- **Catálogo:** nombre de categoría e ISBN únicos (409). Nombre de categoría, título, autor, ISBN y nombre de usuario en blanco responden 422. Un libro necesita al menos 1 copia y nace con `available = total`. Asignar categorías **suma** a las existentes. Buscar en una categoría inexistente responde 404, no `[]`.
 - **Auth:** el email se normaliza (trim y minúsculas, `normalize_email`). El rol se lee de la tabla `roles` al iniciar sesión y viaja en el claim `role` del JWT, junto con `sub` (el user_id). Una cuenta desactivada no puede iniciar sesión (401, mismo mensaje que credenciales erróneas). Sin límite de préstamos por usuario.
 - **Modificar plazos** (`ModifyLoanTerms`): solo `ACTIVE` u `OVERDUE`. Acepta `loaned_at`, `due_at` o `duration_days` (excluyente con `due_at`; recalcula desde `loaned_at`) y un `reason` opcional. Las fechas deben traer zona horaria y se guardan en UTC. `loaned_at` no puede ser futura, `due_at` debe ser mayor que `loaned_at` y algo debe cambiar; si no, `BusinessRuleError` (409). Un `OVERDUE` con nueva `due_at` futura vuelve a `ACTIVE`, y el cambio de estado también se audita.
 - **Auditoría** (`loan_modifications`): `changed_fields` más `old_values`/`new_values` (JSONB, texto ISO UTC, solo los campos cambiados), `modified_by`, `modified_at` y `reason`. Se agrega en el mismo `with uow` que `loans.update` y antes del único `commit`. El puerto solo tiene `add` y `list_by_loan`: es de solo inserción, y la API no expone escritura sobre la auditoría.
@@ -141,18 +142,24 @@ REJECTED          OVERDUE ──────────────────
 
 ## Avance
 
-Roadmap original completo (16 commits). Después se implementó `implementar.md` (rol admin,
-gestión de cuentas, edición de libros, plazos de préstamos con auditoría), todavía **sin
-commit**; la suite queda en 307 pruebas pasando. Commits del roadmap:
+`main` tiene 24 commits: el roadmap original, la fase 5 de `implementar.md` y tres commits que
+se separaron al reescribir la historia por la retroalimentación (ver abajo). La rama
+`fix/review-feedback` corrige los puntos de `~/Downloads/retroalimentacion-prueba-backend.pdf`
+y se integra por Pull Request. Con ella, la suite queda en 348 pruebas y 98 % de cobertura.
 - Fase 1, base: `chore: add project base with poetry`, `feat: add health route`.
-- Fase 2, dominio y datos: `feat: add domain entities`, `feat: add repository ports`, `feat: add postgres repositories and schema`, `feat: add in memory repositories`.
+- Fase 2, dominio y datos: `feat: add domain entities`, `chore: switch the test client to httpx2`, `feat: add repository ports`, `feat: add postgres repositories and schema`, `feat: add in memory repositories`.
 - Fase 3, seguridad: `feat: add jwt authentication`, `feat: add global role validators`.
-- Fase 4, casos de uso: `feat: add catalog management use case`, `feat: add book search by category use case`, `feat: add borrow book use case`, `feat: add return book use case`, `feat: add list loans use case`, `feat: add librarian loan management use case`.
-- Cierre: `docs: add readme and er diagram`, `refactor: move backend files to repository root` (ya no existe la carpeta `Backend/`).
+- Fase 4, casos de uso: `feat: add catalog management use case`, `feat: add book search by category use case`, `chore: share postgres and mock fixtures across tests`, `feat: add borrow book use case`, `feat: add return book use case`, `feat: add list loans use case`, `feat: add librarian loan management use case`.
+- Cierre: `docs: add readme and er diagram`, `chore: move backend files to repository root` (ya no existe la carpeta `Backend/`), `docs: update readme for the repository root`.
+- Fase 5, admin, cuentas y auditoría: `feat: add admin role and loan audit persistence`, `feat: add account management use cases`, `feat: add book update use case`, `feat: add loan terms modification with audit`, `docs: document admin role, accounts and loan audit`.
+- Fase 6, retroalimentación (rama `fix/review-feedback`): `fix: require secrets from the environment`, `fix: answer 409 on simultaneous duplicates`, `fix: reject blank required texts`, `chore: enforce minimum test coverage`, `fix: load book categories in a single query`, `fix: keep book categories when updating a book`, `feat: store the loan request date`, `docs: update project notes for the review fixes`.
+- Pendiente: `docs/DER.jpg` sigue mostrando el esquema `0001` (`docs/er.md` sí está al día).
 
 ## Convenciones
 
-- Commits en Conventional Commits, en inglés y en minúsculas, en imperativo (`feat: add …`, `docs: …`, `refactor: …`), cada uno con sus pruebas. Si hace falta, un cuerpo breve en inglés explica el porqué.
+- Commits en Conventional Commits, en inglés y en minúsculas, en imperativo. **Solo los prefijos `feat`, `fix`, `chore` y `docs`** (nada de `refactor:`). Si hace falta, un cuerpo breve en inglés explica el porqué.
+- **Un solo cambio por commit**, con sus pruebas, y cada commit pasa sus propias pruebas. Un cambio de dependencias, una reorganización de pruebas o un traslado de archivos van en su propio commit (`chore:`), no mezclados con una funcionalidad.
+- **Trabaja en ramas** (`fix/…`, `feat/…`, `docs/…`) y se integran por Pull Request; no subas directo a `main`.
 - **El usuario es el único autor:** nunca añadas `Co-Authored-By` ni atribución a Claude en commits o PRs.
 - No hagas commit ni push sin que el usuario lo pida.
 - Código, docstrings, comentarios y mensajes de error en español; identificadores en inglés.

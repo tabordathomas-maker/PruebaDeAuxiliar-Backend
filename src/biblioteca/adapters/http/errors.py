@@ -7,12 +7,14 @@ from biblioteca.application.errors import (
     ConflictError,
     ForbiddenError,
     InvalidCredentialsError,
+    InvalidInputError,
     InvalidTokenError,
     NotFoundError,
 )
 
 STATUS_BY_ERROR: dict[type[ApplicationError], int] = {
     NotFoundError: 404,
+    InvalidInputError: 422,
     ConflictError: 409,
     BusinessRuleError: 409,
     InvalidCredentialsError: 401,

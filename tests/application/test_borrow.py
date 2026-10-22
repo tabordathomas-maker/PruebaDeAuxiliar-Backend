@@ -1,10 +1,11 @@
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
 
 from biblioteca.application.catalog import CreateBook
 from biblioteca.application.errors import BusinessRuleError, NotFoundError
-from biblioteca.application.loans import BorrowBook
+from biblioteca.application.loans import ApproveLoan, BorrowBook
 from biblioteca.domain.entities import LoanStatus
 
 
@@ -27,6 +28,32 @@ def test_borrow_creates_pending_loan_and_reserves_a_copy(memory_uow, book, reade
     assert _available(memory_uow, book.id) == 1
     with memory_uow:
         assert memory_uow.loans.get(loan.id) == loan
+
+
+def test_borrow_records_when_the_loan_was_requested(memory_uow, book, reader):
+    # Arrange
+    requested = datetime(2026, 10, 20, 9, 30, tzinfo=UTC)
+
+    # Act
+    loan = BorrowBook(memory_uow, clock=lambda: requested).execute(reader.user.id, book.id)
+
+    # Assert
+    assert loan.requested_at == requested
+    with memory_uow:
+        assert memory_uow.loans.get(loan.id).requested_at == requested
+
+
+def test_approval_keeps_the_request_date(memory_uow, book, reader):
+    # Arrange
+    requested = datetime(2026, 10, 20, 9, 30, tzinfo=UTC)
+    approved = requested + timedelta(days=1)
+    pending = BorrowBook(memory_uow, clock=lambda: requested).execute(reader.user.id, book.id)
+
+    # Act
+    loan = ApproveLoan(memory_uow, 14, clock=lambda: approved).execute(pending.id)
+
+    # Assert
+    assert (loan.requested_at, loan.loaned_at) == (requested, approved)
 
 
 def test_borrow_fails_when_no_copies_are_left(memory_uow, book, create_account):

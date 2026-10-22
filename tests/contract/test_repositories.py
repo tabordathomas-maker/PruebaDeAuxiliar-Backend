@@ -127,6 +127,23 @@ def test_loan_update_persists_status_and_dates(uow):
         assert uow.loans.get(loan.id).returned_at == returned_at
 
 
+def test_loan_request_date_is_persisted(uow):
+    # Arrange
+    requested = datetime(2026, 10, 20, 9, 30, tzinfo=UTC)
+    with uow:
+        user = _seed_user(uow)
+        book = _seed_book(uow)
+        loan = Loan(user_id=user.id, book_id=book.id, requested_at=requested)
+
+        # Act
+        uow.loans.add(loan)
+        uow.commit()
+
+    # Assert
+    with uow:
+        assert uow.loans.get(loan.id).requested_at == requested
+
+
 @pytest.mark.parametrize("missing", ["user", "book", "category", "loan"])
 def test_unknown_ids_return_none(uow, missing):
     from uuid import uuid4
