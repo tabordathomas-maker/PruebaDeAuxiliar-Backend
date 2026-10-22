@@ -9,8 +9,8 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from uuid import UUID
 
-from biblioteca.application.errors import BusinessRuleError, NotFoundError
-from biblioteca.domain.entities import Loan, LoanStatus
+from biblioteca.application.errors import BusinessRuleError, ForbiddenError, NotFoundError
+from biblioteca.domain.entities import Loan, LoanStatus, Principal, RoleName
 from biblioteca.domain.ports import UnitOfWork
 
 # Préstamos que todavía retienen un ejemplar.
@@ -81,3 +81,24 @@ class ReturnBook:
             _register_return(self.uow, loan, self.clock())
             self.uow.commit()
             return loan
+
+
+class ListLoans:
+    """El bibliotecario ve todos los préstamos; el usuario solo los suyos."""
+
+    def __init__(self, uow: UnitOfWork) -> None:
+        self.uow = uow
+
+    def execute(
+        self,
+        requester: Principal,
+        status: LoanStatus | None = None,
+        user_id: UUID | None = None,
+    ) -> list[Loan]:
+        if requester.role != RoleName.LIBRARIAN:
+            if user_id is not None and user_id != requester.user_id:
+                raise ForbiddenError("Solo puedes ver tus propios préstamos")
+            user_id = requester.user_id
+        statuses = [status] if status is not None else None
+        with self.uow:
+            return self.uow.loans.list(user_id=user_id, statuses=statuses)
