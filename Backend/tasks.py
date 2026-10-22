@@ -8,6 +8,12 @@ def db(c):
 
 
 @task(pre=[db])
+def migrate(c):
+    """Aplica las migraciones pendientes."""
+    c.run("alembic upgrade head")
+
+
+@task(pre=[migrate])
 def up(c, host="127.0.0.1", port=8000):
     """Levanta toda la aplicación: base de datos y servidor HTTP."""
     c.run(f"uvicorn biblioteca.main:app --app-dir src --host {host} --port {port}")

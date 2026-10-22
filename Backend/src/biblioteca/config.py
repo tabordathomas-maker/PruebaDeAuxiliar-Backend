@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = "postgresql+psycopg://biblioteca:biblioteca@localhost:5432/biblioteca"
+    database_url: str = "postgresql+psycopg://biblioteca:biblioteca@localhost:15432/biblioteca"
     jwt_secret: str = "cambia-este-secreto"
     jwt_algorithm: str = "HS256"
     jwt_expires_minutes: int = 60
