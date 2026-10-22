@@ -99,15 +99,56 @@ def test_librarian_role_reaches_librarian_route(probe_client, auth_header):
     assert response.status_code == 200
 
 
+def _api_routes(routes, prefix=""):
+    """Rutas de la app con su ruta completa, también las de los routers incluidos.
+
+    Desde FastAPI 0.159, `app.routes` envuelve cada router incluido en un objeto que
+    guarda el router original en `original_router`; sin recorrerlo no se ve ninguna ruta.
+    """
+    for route in routes:
+        if isinstance(route, APIRoute):
+            yield prefix + route.path_format, route
+        included = getattr(route, "original_router", None)
+        if included is not None:
+            context = getattr(route, "include_context", None)
+            yield from _api_routes(included.routes, prefix + getattr(context, "prefix", ""))
+
+
+def test_route_walk_finds_every_documented_route(app):
+    # Arrange
+    documented = {
+        (method.upper(), path)
+        for path, operations in app.openapi()["paths"].items()
+        for method in operations
+    }
+
+    # Act
+    walked = {(method, path) for path, route in _api_routes(app.routes) for method in route.methods}
+
+    # Assert
+    assert documented and documented <= walked
+
+
 def test_every_app_route_is_private_unless_marked_public(app):
     """Red de seguridad: una ruta nueva sin @public queda protegida."""
-    client = TestClient(app)
-    for route in app.routes:
-        if not isinstance(route, APIRoute) or getattr(route.endpoint, "__public__", False):
-            continue
-        method = next(iter(route.methods))
-        path = route.path_format.replace("{", "").replace("}", "")
-        assert client.request(method, path).status_code == 401, route.path
+    # Arrange: un error del servidor también cuenta como ruta sin proteger.
+    client = TestClient(app, raise_server_exceptions=False)
+    private = [
+        (path, route)
+        for path, route in _api_routes(app.routes)
+        if not getattr(route.endpoint, "__public__", False)
+    ]
+
+    # Act
+    statuses = {
+        (method, path): client.request(method, path.replace("{", "").replace("}", "")).status_code
+        for path, route in private
+        for method in route.methods
+    }
+
+    # Assert
+    assert len(private) >= 20
+    assert {key: code for key, code in statuses.items() if code != 401} == {}
 
 
 @pytest.mark.parametrize("path", ["/docs", "/openapi.json"])
