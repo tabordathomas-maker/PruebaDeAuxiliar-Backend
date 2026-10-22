@@ -8,10 +8,19 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from biblioteca.adapters.persistence.postgres import tables as t
-from biblioteca.domain.entities import Book, Category, Loan, LoanStatus, Role, User
+from biblioteca.domain.entities import (
+    Book,
+    Category,
+    Loan,
+    LoanModification,
+    LoanStatus,
+    Role,
+    User,
+)
 from biblioteca.domain.ports import (
     BookRepository,
     CategoryRepository,
+    LoanModificationRepository,
     LoanRepository,
     RoleRepository,
     UnitOfWork,
@@ -42,15 +51,7 @@ class PostgresUserRepository(UserRepository):
         self.session = session
 
     def add(self, user: User) -> None:
-        self.session.execute(
-            insert(t.users).values(
-                id=user.id,
-                name=user.name,
-                email=user.email,
-                password_hash=user.password_hash,
-                role_id=user.role_id,
-            )
-        )
+        self.session.execute(insert(t.users).values(**self._columns(user)))
 
     def get(self, user_id: UUID) -> User | None:
         return self._one(t.users.c.id == user_id)
@@ -58,17 +59,42 @@ class PostgresUserRepository(UserRepository):
     def get_by_email(self, email: str) -> User | None:
         return self._one(t.users.c.email == email)
 
+    def update(self, user: User) -> None:
+        self.session.execute(
+            update(t.users).where(t.users.c.id == user.id).values(**self._columns(user))
+        )
+
+    def list(self, role_ids: Iterable[UUID] | None = None) -> list[User]:
+        query = select(t.users).order_by(t.users.c.email)
+        if role_ids is not None:
+            query = query.where(t.users.c.role_id.in_(list(role_ids)))
+        return [self._to_entity(row) for row in self.session.execute(query)]
+
     def _one(self, condition) -> User | None:
         row = self.session.execute(select(t.users).where(condition)).one_or_none()
-        if row is None:
-            return None
+        return self._to_entity(row) if row else None
+
+    @staticmethod
+    def _to_entity(row) -> User:
         return User(
             id=row.id,
             name=row.name,
             email=row.email,
             password_hash=row.password_hash,
             role_id=row.role_id,
+            active=row.active,
         )
+
+    @staticmethod
+    def _columns(user: User) -> dict:
+        return {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "password_hash": user.password_hash,
+            "role_id": user.role_id,
+            "active": user.active,
+        }
 
 
 class PostgresCategoryRepository(CategoryRepository):
@@ -221,6 +247,45 @@ class PostgresLoanRepository(LoanRepository):
         }
 
 
+class PostgresLoanModificationRepository(LoanModificationRepository):
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def add(self, modification: LoanModification) -> None:
+        self.session.execute(
+            insert(t.loan_modifications).values(
+                id=modification.id,
+                loan_id=modification.loan_id,
+                modified_by=modification.modified_by,
+                modified_at=modification.modified_at,
+                changed_fields=modification.changed_fields,
+                old_values=modification.old_values,
+                new_values=modification.new_values,
+                reason=modification.reason,
+            )
+        )
+
+    def list_by_loan(self, loan_id: UUID) -> list[LoanModification]:
+        query = (
+            select(t.loan_modifications)
+            .where(t.loan_modifications.c.loan_id == loan_id)
+            .order_by(t.loan_modifications.c.modified_at, t.loan_modifications.c.id)
+        )
+        return [
+            LoanModification(
+                id=row.id,
+                loan_id=row.loan_id,
+                modified_by=row.modified_by,
+                modified_at=row.modified_at,
+                changed_fields=list(row.changed_fields),
+                old_values=row.old_values,
+                new_values=row.new_values,
+                reason=row.reason,
+            )
+            for row in self.session.execute(query)
+        ]
+
+
 class PostgresUnitOfWork(UnitOfWork):
     """Abre una sesión por bloque `with`; los repositorios comparten su transacción."""
 
@@ -234,6 +299,7 @@ class PostgresUnitOfWork(UnitOfWork):
         self.categories = PostgresCategoryRepository(self.session)
         self.books = PostgresBookRepository(self.session)
         self.loans = PostgresLoanRepository(self.session)
+        self.loan_modifications = PostgresLoanModificationRepository(self.session)
         return self
 
     def __exit__(self, *exc_info) -> None:

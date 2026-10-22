@@ -9,7 +9,16 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from uuid import UUID
 
-from biblioteca.domain.entities import Book, Category, Loan, LoanStatus, Principal, Role, User
+from biblioteca.domain.entities import (
+    Book,
+    Category,
+    Loan,
+    LoanModification,
+    LoanStatus,
+    Principal,
+    Role,
+    User,
+)
 
 
 class RoleRepository(ABC):
@@ -32,6 +41,13 @@ class UserRepository(ABC):
 
     @abstractmethod
     def get_by_email(self, email: str) -> User | None: ...
+
+    @abstractmethod
+    def update(self, user: User) -> None: ...
+
+    @abstractmethod
+    def list(self, role_ids: Iterable[UUID] | None = None) -> list[User]:
+        """Ordenados por email; con role_ids solo los de esos roles."""
 
 
 class CategoryRepository(ABC):
@@ -85,6 +101,17 @@ class LoanRepository(ABC):
     ) -> list[Loan]: ...
 
 
+class LoanModificationRepository(ABC):
+    """Historial de cambios de préstamos: solo se agrega y se consulta, nunca se edita."""
+
+    @abstractmethod
+    def add(self, modification: LoanModification) -> None: ...
+
+    @abstractmethod
+    def list_by_loan(self, loan_id: UUID) -> list[LoanModification]:
+        """Del más antiguo al más reciente."""
+
+
 class UnitOfWork(ABC):
     """Agrupa los repositorios en una transacción.
 
@@ -96,6 +123,7 @@ class UnitOfWork(ABC):
     categories: CategoryRepository
     books: BookRepository
     loans: LoanRepository
+    loan_modifications: LoanModificationRepository
 
     def __enter__(self) -> "UnitOfWork":
         return self

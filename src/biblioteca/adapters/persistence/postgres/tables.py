@@ -1,6 +1,8 @@
 """Esquema relacional que sigue el DER (docs/DER.jpg)."""
 
 from sqlalchemy import (
+    ARRAY,
+    Boolean,
     CheckConstraint,
     Column,
     DateTime,
@@ -11,7 +13,9 @@ from sqlalchemy import (
     Table,
     Text,
     Uuid,
+    true,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 
 from biblioteca.domain.entities import LoanStatus
 
@@ -32,6 +36,7 @@ users = Table(
     Column("email", Text, nullable=False, unique=True),
     Column("password_hash", Text, nullable=False),
     Column("role_id", Uuid, ForeignKey("roles.id", ondelete="RESTRICT"), nullable=False),
+    Column("active", Boolean, nullable=False, server_default=true()),
 )
 
 categories = Table(
@@ -85,4 +90,22 @@ loans = Table(
         Enum(LoanStatus, name="loan_status", values_callable=lambda e: [m.value for m in e]),
         nullable=False,
     ),
+)
+
+# Auditoría de préstamos: una fila por modificación, nunca se actualiza. RESTRICT en
+# ambas llaves para que el historial no se pierda: préstamos y usuarios no se borran
+# (las cuentas se desactivan).
+loan_modifications = Table(
+    "loan_modifications",
+    metadata,
+    Column("id", Uuid, primary_key=True),
+    Column(
+        "loan_id", Uuid, ForeignKey("loans.id", ondelete="RESTRICT"), nullable=False, index=True
+    ),
+    Column("modified_by", Uuid, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False),
+    Column("modified_at", DateTime(timezone=True), nullable=False),
+    Column("changed_fields", ARRAY(Text), nullable=False),
+    Column("old_values", JSONB, nullable=False),
+    Column("new_values", JSONB, nullable=False),
+    Column("reason", Text),
 )

@@ -27,6 +27,7 @@ from biblioteca.domain.entities import Principal, RoleName, User
 from biblioteca.domain.ports import (
     BookRepository,
     CategoryRepository,
+    LoanModificationRepository,
     LoanRepository,
     PasswordHasher,
     RoleRepository,
@@ -40,7 +41,7 @@ TEST_DATABASE_URL = os.getenv(
     "postgresql+psycopg://biblioteca:biblioteca@localhost:15432/biblioteca_test",
 )
 ALEMBIC_INI = os.path.join(os.path.dirname(__file__), "..", "alembic.ini")
-DATA_TABLES = "loans, book_categories, books, categories, users"
+DATA_TABLES = "loan_modifications, loans, book_categories, books, categories, users"
 
 
 def _create_test_database(url) -> None:
@@ -111,6 +112,7 @@ def mock_uow(mocker):
     uow.categories = mocker.Mock(spec=CategoryRepository)
     uow.books = mocker.Mock(spec=BookRepository)
     uow.loans = mocker.Mock(spec=LoanRepository)
+    uow.loan_modifications = mocker.Mock(spec=LoanModificationRepository)
     return uow
 
 
@@ -163,6 +165,11 @@ def create_account(store, hasher, token_service):
 @pytest.fixture
 def librarian(create_account) -> Account:
     return create_account(RoleName.LIBRARIAN)
+
+
+@pytest.fixture
+def admin(create_account) -> Account:
+    return create_account(RoleName.ADMIN)
 
 
 @pytest.fixture

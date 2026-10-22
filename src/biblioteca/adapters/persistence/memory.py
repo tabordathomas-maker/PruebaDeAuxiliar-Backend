@@ -9,10 +9,20 @@ from copy import deepcopy
 from dataclasses import dataclass, field, fields
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from biblioteca.domain.entities import Book, Category, Loan, LoanStatus, Role, RoleName, User
+from biblioteca.domain.entities import (
+    Book,
+    Category,
+    Loan,
+    LoanModification,
+    LoanStatus,
+    Role,
+    RoleName,
+    User,
+)
 from biblioteca.domain.ports import (
     BookRepository,
     CategoryRepository,
+    LoanModificationRepository,
     LoanRepository,
     RoleRepository,
     UnitOfWork,
@@ -32,6 +42,7 @@ class InMemoryStore:
     categories: dict[UUID, Category] = field(default_factory=dict)
     books: dict[UUID, Book] = field(default_factory=dict)
     loans: dict[UUID, Loan] = field(default_factory=dict)
+    loan_modifications: dict[UUID, LoanModification] = field(default_factory=dict)
 
 
 class _InMemoryRepository[T]:
@@ -62,6 +73,11 @@ class InMemoryRoleRepository(_InMemoryRepository[Role], RoleRepository):
 class InMemoryUserRepository(_InMemoryRepository[User], UserRepository):
     def get_by_email(self, email: str) -> User | None:
         return self._find(email=email)
+
+    def list(self, role_ids: Iterable[UUID] | None = None) -> list[User]:
+        wanted = set(role_ids) if role_ids is not None else None
+        users = [u for u in self.items.values() if wanted is None or u.role_id in wanted]
+        return sorted(deepcopy(users), key=lambda u: u.email)
 
 
 class InMemoryCategoryRepository(_InMemoryRepository[Category], CategoryRepository):
@@ -104,6 +120,18 @@ class InMemoryLoanRepository(_InMemoryRepository[Loan], LoanRepository):
         return deepcopy(undated + dated)
 
 
+class InMemoryLoanModificationRepository(LoanModificationRepository):
+    def __init__(self, items: dict[UUID, LoanModification]) -> None:
+        self.items = items
+
+    def add(self, modification: LoanModification) -> None:
+        self.items[modification.id] = deepcopy(modification)
+
+    def list_by_loan(self, loan_id: UUID) -> list[LoanModification]:
+        found = [m for m in self.items.values() if m.loan_id == loan_id]
+        return sorted(deepcopy(found), key=lambda m: (m.modified_at, m.id))
+
+
 class InMemoryUnitOfWork(UnitOfWork):
     def __init__(self, store: InMemoryStore | None = None) -> None:
         self.store = store or InMemoryStore()
@@ -131,3 +159,6 @@ class InMemoryUnitOfWork(UnitOfWork):
         self.categories = InMemoryCategoryRepository(self._working.categories)
         self.books = InMemoryBookRepository(self._working.books)
         self.loans = InMemoryLoanRepository(self._working.loans)
+        self.loan_modifications = InMemoryLoanModificationRepository(
+            self._working.loan_modifications
+        )

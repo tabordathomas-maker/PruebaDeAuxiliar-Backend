@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 
 
 class RoleName(StrEnum):
+    ADMIN = "admin"
     LIBRARIAN = "librarian"
     USER = "user"
 
@@ -44,6 +45,8 @@ class User:
     email: str
     password_hash: str
     role_id: UUID
+    # Las bajas son lógicas: una cuenta desactivada conserva sus préstamos y auditorías.
+    active: bool = True
     id: UUID = field(default_factory=uuid4)
 
 
@@ -72,4 +75,22 @@ class Loan:
     loaned_at: datetime | None = None
     due_at: datetime | None = None
     returned_at: datetime | None = None
+    id: UUID = field(default_factory=uuid4)
+
+
+@dataclass
+class LoanModification:
+    """Registro histórico de un cambio en un préstamo; nunca se modifica ni se borra.
+
+    Los valores se guardan como texto (fechas en ISO 8601 UTC) para poder compararlos
+    tal como estaban, aunque el préstamo cambie después.
+    """
+
+    loan_id: UUID
+    modified_by: UUID
+    modified_at: datetime
+    changed_fields: list[str]
+    old_values: dict[str, str | None]
+    new_values: dict[str, str | None]
+    reason: str | None = None
     id: UUID = field(default_factory=uuid4)
