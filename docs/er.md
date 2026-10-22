@@ -1,8 +1,8 @@
 # Modelo entidad-relación
 
-La imagen original está en [`DER.jpg`](DER.jpg). Esta versión en Mermaid es la misma
-y se puede versionar y comparar en los diffs. El esquema real está en
-`migrations/versions/0001_initial_schema.py`.
+La imagen original está en [`DER.jpg`](DER.jpg) y refleja el esquema inicial (`0001`).
+Esta versión en Mermaid está al día, incluida la migración `0002`, y se puede versionar
+y comparar en los diffs. El esquema real está en `migrations/versions/`.
 
 ```mermaid
 erDiagram
@@ -10,6 +10,8 @@ erDiagram
     users ||--o{ loans : "1:N"
     books ||--o{ loans : "1:N"
     books ||--o{ book_categories : "1:N"
+    loans ||--o{ loan_modifications : "1:N"
+    users ||--o{ loan_modifications : "1:N (autor)"
     categories ||--o{ book_categories : "1:N"
 
     roles {
@@ -22,6 +24,7 @@ erDiagram
         text email UK
         text password_hash
         uuid role_id FK
+        bool active "baja lógica"
     }
     categories {
         uuid id PK
@@ -48,6 +51,16 @@ erDiagram
         timestamptz returned_at
         loan_status status "pending | active | overdue | returned | rejected"
     }
+    loan_modifications {
+        uuid id PK
+        uuid loan_id FK "indexado"
+        uuid modified_by FK
+        timestamptz modified_at
+        text_array changed_fields
+        jsonb old_values
+        jsonb new_values
+        text reason
+    }
 ```
 
 ## Relaciones que pide la prueba
@@ -66,3 +79,6 @@ erDiagram
 - **`returned_at` vacío** significa que el libro no se ha devuelto. `status` distingue además entre pendiente, activo, vencido, devuelto y rechazado.
 - **Índices explícitos** en `loans.user_id` y `loans.book_id`, porque Postgres no indexa las llaves foráneas por su cuenta.
 - **`ON DELETE RESTRICT`** en las llaves de `loans` y `users`: no se borra un libro ni un usuario con préstamos. En la pivote es `CASCADE`.
+- **Roles:** `admin`, `librarian` y `user`. El de `admin` lo agrega la migración `0002`.
+- **Bajas lógicas** con `users.active`: las cuentas no se borran, así que sus préstamos y su autoría en la auditoría se conservan.
+- **`loan_modifications`** es la auditoría de los cambios de plazos: una fila por modificación, nunca se actualiza. Sus dos llaves son `RESTRICT`, de modo que la base se niega a borrar un préstamo o un usuario que aparezca en el historial. Los valores se guardan en JSONB como texto (fechas ISO 8601 en UTC) para compararlos tal como estaban.

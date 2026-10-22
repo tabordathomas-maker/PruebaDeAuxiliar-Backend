@@ -1,7 +1,7 @@
 # Biblioteca: API de préstamo de libros
 
-API REST con arquitectura hexagonal para gestionar el préstamo de libros. Hay dos
-roles: **bibliotecario** y **usuario**.
+API REST con arquitectura hexagonal para gestionar el préstamo de libros. Hay tres
+roles: **administrador**, **bibliotecario** y **usuario** (lector).
 
 Stack: Python 3.12+, Poetry, FastAPI, SQLAlchemy 2 con Postgres 17, Alembic, JWT
 (PyJWT), bcrypt, pytest con pytest-mock, e Invoke para las tareas.
@@ -29,12 +29,25 @@ poetry run invoke up
 Esa única tarea hace todo lo siguiente:
 1. Levanta Postgres con Docker y espera a que esté listo.
 2. Aplica las migraciones, que incluyen los roles base.
-3. Crea el bibliotecario inicial si todavía no existe.
+3. Crea el administrador y el bibliotecario iniciales si todavía no existen.
 4. Arranca la API en http://127.0.0.1:8000.
 
 - `GET /` responde `200 {"status": "ok"}`.
 - La documentación interactiva está en http://127.0.0.1:8000/docs. El botón *Authorize* acepta el token.
+- Administrador inicial: `admin@example.com` / `administrador123`. Se cambia con `ADMIN_EMAIL` y `ADMIN_PASSWORD`.
 - Bibliotecario inicial: `bibliotecario@example.com` / `bibliotecario123`. Se cambia con `LIBRARIAN_EMAIL` y `LIBRARIAN_PASSWORD`.
+
+### Migraciones
+
+`invoke up` y `invoke migrate` aplican las pendientes con `alembic upgrade head`.
+`alembic current` muestra la versión aplicada.
+
+| Versión | Cambios |
+|---|---|
+| `0001` | Esquema inicial y roles `librarian` y `user` |
+| `0002` | Rol `admin`, columna `users.active` (las cuentas existentes quedan activas) y tabla `loan_modifications` |
+
+Las dos son aditivas. El `downgrade` de `0002` es destructivo: borra la auditoría.
 
 > El contenedor publica Postgres en el puerto **15432**, no en el 5432, para no chocar
 > con un Postgres instalado en la máquina. Se cambia con `DB_PORT` y `DATABASE_URL`.
@@ -50,7 +63,9 @@ poetry run invoke test     # o: poetry run pytest
 - **Casos de uso** (`tests/application`): son pruebas unitarias con el repositorio en memoria y con mocks (`mock_uow`, `pytest-mock`). No necesitan base de datos.
 - **HTTP** (`tests/http`): usan la app real, pero con el repositorio en memoria inyectado. Cubren el 401, el 403 y los permisos de cada rol.
 - **Contrato de repositorios** (`tests/contract`): las mismas pruebas corren contra el repositorio en memoria y contra Postgres. Eso demuestra que las implementaciones son intercambiables.
-- **Integración** (`tests/integration`): dos solicitudes simultáneas por la última copia, contra Postgres.
+- **Integración** (`tests/integration`): contra Postgres. Dos solicitudes simultáneas por la última copia, y la atomicidad entre un préstamo y su auditoría: si falla la inserción de la auditoría, el cambio del préstamo se revierte.
+
+Las pruebas nuevas siguen el patrón **AAA** (Arrange, Act, Assert), marcado con comentarios.
 
 Las pruebas que usan Postgres crean y migran su propia base, `biblioteca_test`. Si
 Postgres no está levantado (`invoke db`) se **omiten** y el resto corre igual.
@@ -72,6 +87,7 @@ src/biblioteca/
 - **Patrón repositorio.** Los casos de uso reciben un `UnitOfWork`, que agrupa los repositorios en una transacción. La implementación concreta se inyecta en `adapters/http/dependencies.py`, y las pruebas la sustituyen con `app.dependency_overrides`.
 - **Validador global** (`adapters/http/security.py`). Es una sola dependencia registrada en la app que corre antes de cada ruta. Toda ruta es privada por defecto:
   - Sin token, o con un token inválido o expirado, responde **401**.
+  - También responde **401** si la cuenta del token ya no existe, está desactivada o cambió de rol. Se comprueba en la base en cada petición, así que una baja surte efecto de inmediato.
   - `@roles(...)` exige además un rol; si no corresponde, responde **403**.
   - `@public` exime a una ruta.
 
@@ -94,6 +110,31 @@ src/biblioteca/
 | Bibliotecario | Marcar vencido | `POST /loans/{id}/overdue` |
 | Bibliotecario | Crear categoría / libro | `POST /categories`, `POST /books` |
 | Bibliotecario | Asignar categorías a un libro | `POST /books/{id}/categories` |
+| Admin, bibliotecario | Modificar un libro | `PATCH /books/{id}` |
+| Admin, bibliotecario | Modificar fechas o plazo de un préstamo (queda auditado) | `PATCH /loans/{id}` |
+| Admin, bibliotecario | Ver la auditoría de un préstamo | `GET /loans/{id}/modifications` |
+| Admin, bibliotecario | Dar de baja una cuenta (el bibliotecario, solo lectores) | `DELETE /users/{id}` |
+| Admin | Crear bibliotecarios y lectores | `POST /users` |
+| Admin | Consultar bibliotecarios y lectores | `GET /users?role=…`, `GET /users/{id}` |
+| Admin | Modificar bibliotecarios y lectores | `PUT /users/{id}` |
+| Autenticado | Ver su propia cuenta | `GET /users/me` |
+| Usuario | Modificar sus datos / darse de baja | `PUT /users/me`, `DELETE /users/me` |
+
+### Matriz de permisos de cuentas, libros y plazos
+
+| Operación | Admin | Bibliotecario | Lector |
+|---|---|---|---|
+| Crear, modificar o desactivar bibliotecarios | Sí | No | No |
+| Crear lectores | Sí | No (los lectores se registran solos) | No |
+| Modificar datos de lectores | Sí | No | Solo los suyos |
+| Desactivar lectores | Sí | Sí | Solo su cuenta |
+| Modificar libros | Sí | Sí | No |
+| Modificar plazos de préstamos | Sí | Sí | No |
+| Consultar la auditoría de préstamos | Sí | Sí | No |
+
+Los administradores no se gestionan por la API: se crean con el seed. Nadie puede
+cambiar roles. Las rutas del bibliotecario que ya existían (catálogo, aprobar,
+cerrar, marcar vencido, listar préstamos) siguen siendo solo del bibliotecario.
 
 ## Reglas de negocio
 
@@ -112,6 +153,10 @@ REJECTED           OVERDUE ─────────────────�
 - **Cerrar** rechaza un préstamo pendiente o registra la devolución de uno activo o vencido. En ambos casos repone el ejemplar.
 - **Devolver** lo hace el usuario con sus propios préstamos activos o vencidos. Los préstamos de otro usuario responden 404, para no revelar que existen.
 - **Marcar vencido** solo se permite en préstamos activos cuya fecha límite ya pasó.
+- **Modificar plazos** (`PATCH /loans/{id}`) acepta `loaned_at`, `due_at` o `duration_days` (excluyente con `due_at`), más un `reason` opcional, y solo en préstamos activos o vencidos. Las fechas deben traer zona horaria y se guardan en UTC. `loaned_at` no puede ser futura y `due_at` debe ser posterior a `loaned_at`. Si un préstamo vencido recibe una fecha límite futura, vuelve a `active`.
+- **Auditoría.** Cada modificación de plazos inserta una fila en `loan_modifications` con el préstamo, quién la hizo, cuándo (UTC), los campos cambiados y sus valores anteriores y nuevos. Se escribe en la misma transacción que el préstamo, así que o se guardan los dos o ninguno. La API no permite editar ni borrar estos registros.
+- **Bajas lógicas.** `DELETE /users/...` pone `active = false`: la cuenta no puede iniciar sesión y sus tokens dejan de valer. Préstamos y auditoría se conservan. Se niega con 409 si la cuenta tiene préstamos abiertos.
+- **Modificar un libro**: cambiar `total_copies` mueve `available_copies` en la misma cantidad y no puede bajar por debajo de los ejemplares que están fuera (409).
 
 Códigos de error: 401 (sin credenciales válidas), 403 (rol sin acceso o recurso
 ajeno), 404 (no existe), 409 (conflicto o regla de negocio), 422 (entrada inválida).
@@ -131,5 +176,6 @@ Está en [`docs/DER.jpg`](docs/DER.jpg), y en [`docs/er.md`](docs/er.md) en vers
 | `JWT_ALGORITHM` / `JWT_EXPIRES_MINUTES` | `HS256` / `60` |
 | `LOAN_DAYS` | `14` |
 | `LIBRARIAN_NAME` / `LIBRARIAN_EMAIL` / `LIBRARIAN_PASSWORD` | bibliotecario inicial |
+| `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | administrador inicial |
 
 Fuera de alcance: interfaz gráfica y despliegue.
