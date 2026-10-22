@@ -157,12 +157,11 @@ class PostgresBookRepository(BookRepository):
         query = select(t.books).where(t.books.c.id == book_id)
         if for_update:
             query = query.with_for_update()
-        row = self.session.execute(query).one_or_none()
-        return self._to_entity(row) if row else None
+        return self._one(self.session.execute(query).one_or_none())
 
     def get_by_isbn(self, isbn: str) -> Book | None:
-        row = self.session.execute(select(t.books).where(t.books.c.isbn == isbn)).one_or_none()
-        return self._to_entity(row) if row else None
+        query = select(t.books).where(t.books.c.isbn == isbn)
+        return self._one(self.session.execute(query).one_or_none())
 
     def update(self, book: Book) -> None:
         with _unique(f"Ya existe un libro con el ISBN {book.isbn}"):
@@ -179,7 +178,7 @@ class PostgresBookRepository(BookRepository):
             .where(t.book_categories.c.category_id == category_id)
             .order_by(t.books.c.title)
         )
-        return [self._to_entity(row) for row in self.session.execute(query)]
+        return self._to_entities(self.session.execute(query).all())
 
     def _insert_categories(self, book_id: UUID, category_ids: set[UUID]) -> None:
         if category_ids:
@@ -188,19 +187,32 @@ class PostgresBookRepository(BookRepository):
                 [{"book_id": book_id, "category_id": cid} for cid in category_ids],
             )
 
-    def _to_entity(self, row) -> Book:
-        category_ids = self.session.scalars(
-            select(t.book_categories.c.category_id).where(t.book_categories.c.book_id == row.id)
-        )
-        return Book(
-            id=row.id,
-            title=row.title,
-            author=row.author,
-            isbn=row.isbn,
-            total_copies=row.total_copies,
-            available_copies=row.available_copies,
-            category_ids=set(category_ids),
-        )
+    def _one(self, row) -> Book | None:
+        return self._to_entities([row])[0] if row else None
+
+    def _to_entities(self, rows) -> list[Book]:
+        """Trae las categorías de todos los libros en una sola consulta, no una por libro."""
+        category_ids: dict[UUID, set[UUID]] = {row.id: set() for row in rows}
+        if category_ids:
+            pairs = self.session.execute(
+                select(t.book_categories.c.book_id, t.book_categories.c.category_id).where(
+                    t.book_categories.c.book_id.in_(list(category_ids))
+                )
+            )
+            for book_id, category_id in pairs:
+                category_ids[book_id].add(category_id)
+        return [
+            Book(
+                id=row.id,
+                title=row.title,
+                author=row.author,
+                isbn=row.isbn,
+                total_copies=row.total_copies,
+                available_copies=row.available_copies,
+                category_ids=category_ids[row.id],
+            )
+            for row in rows
+        ]
 
     @staticmethod
     def _columns(book: Book) -> dict:
