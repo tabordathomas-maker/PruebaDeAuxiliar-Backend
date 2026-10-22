@@ -22,8 +22,8 @@ packages = [{ include = "biblioteca", from = "src" }]
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.3"
 pytest-mock = ">=3.14"
-httpx = ">=0.28"
 invoke = ">=2.2"
+httpx2 = "^2.16.0"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
