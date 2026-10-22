@@ -38,9 +38,12 @@ def probe_client(app) -> TestClient:
 
 
 @pytest.fixture
-def auth_header(token_service):
+def auth_header(token_service, create_account):
     def build(role: str, service: JwtTokenService = token_service) -> dict[str, str]:
-        token = service.issue(Principal(user_id=uuid4(), role=role))
+        # El validador comprueba la cuenta en la base: los roles reales usan una cuenta
+        # registrada; un rol inventado no puede tenerla.
+        user_id = create_account(role).user.id if role in set(RoleName) else uuid4()
+        token = service.issue(Principal(user_id=user_id, role=role))
         return {"Authorization": f"Bearer {token}"}
 
     return build

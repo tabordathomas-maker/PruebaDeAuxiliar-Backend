@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     librarian_name: str = "Bibliotecario"
     librarian_email: str = "bibliotecario@example.com"
     librarian_password: str = "bibliotecario123"
+    admin_name: str = "Administrador"
+    admin_email: str = "admin@example.com"
+    admin_password: str = "administrador123"
 
 
 @lru_cache

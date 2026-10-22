@@ -1,6 +1,6 @@
 from fastapi import Depends, FastAPI
 
-from biblioteca.adapters.http import auth, catalog, health, loans
+from biblioteca.adapters.http import auth, catalog, health, loans, users
 from biblioteca.adapters.http.errors import register_error_handlers
 from biblioteca.adapters.http.security import global_validator
 
@@ -12,6 +12,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router)
     app.include_router(catalog.router)
     app.include_router(loans.router)
+    app.include_router(users.router)
     return app
 
 

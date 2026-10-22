@@ -1,11 +1,16 @@
 """Casos de uso de autenticación: registro e inicio de sesión."""
 
-from biblioteca.application.errors import ConflictError, InvalidCredentialsError, NotFoundError
+from biblioteca.application.errors import (
+    ConflictError,
+    InvalidCredentialsError,
+    InvalidTokenError,
+    NotFoundError,
+)
 from biblioteca.domain.entities import Principal, RoleName, User
 from biblioteca.domain.ports import PasswordHasher, TokenService, UnitOfWork
 
 
-def _normalize_email(email: str) -> str:
+def normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
@@ -17,7 +22,7 @@ class RegisterUser:
     def execute(
         self, name: str, email: str, password: str, role: RoleName = RoleName.USER
     ) -> User:
-        email = _normalize_email(email)
+        email = normalize_email(email)
         with self.uow:
             if self.uow.users.get_by_email(email) is not None:
                 raise ConflictError(f"Ya existe un usuario con el email {email}")
@@ -46,9 +51,33 @@ class Login:
 
     def execute(self, email: str, password: str) -> str:
         with self.uow:
-            user = self.uow.users.get_by_email(_normalize_email(email))
-            # El mismo error para email desconocido o clave errónea: no se revela cuál falló.
-            if user is None or not self.hasher.verify(password, user.password_hash):
+            user = self.uow.users.get_by_email(normalize_email(email))
+            # El mismo error para email desconocido, clave errónea o cuenta desactivada:
+            # no se revela cuál falló.
+            if (
+                user is None
+                or not user.active
+                or not self.hasher.verify(password, user.password_hash)
+            ):
                 raise InvalidCredentialsError("Email o contraseña incorrectos")
             role = self.uow.roles.get(user.role_id)
             return self.tokens.issue(Principal(user_id=user.id, role=role.name))
+
+
+class VerifyPrincipal:
+    """Comprueba que el dueño de un token sigue existiendo, activo y con el mismo rol.
+
+    El JWT dura hasta que expira; sin esta comprobación una cuenta desactivada
+    seguiría operando con su token hasta entonces.
+    """
+
+    def __init__(self, uow: UnitOfWork) -> None:
+        self.uow = uow
+
+    def execute(self, principal: Principal) -> None:
+        with self.uow:
+            user = self.uow.users.get(principal.user_id)
+            if user is None or not user.active:
+                raise InvalidTokenError("La cuenta no existe o está desactivada")
+            if self.uow.roles.get(user.role_id).name != principal.role:
+                raise InvalidTokenError("El rol del token ya no corresponde a la cuenta")

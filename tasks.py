@@ -15,7 +15,7 @@ def migrate(c):
 
 @task(pre=[migrate])
 def seed(c):
-    """Crea el bibliotecario inicial si no existe."""
+    """Crea el administrador y el bibliotecario iniciales si no existen."""
     c.run("python -m biblioteca.seed")
 
 

@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from biblioteca.application.users import UserProfile
 from biblioteca.domain.entities import Book, Category, Loan, LoanStatus
 
 
@@ -58,4 +59,22 @@ class LoanResponse(BaseModel):
             loaned_at=loan.loaned_at,
             due_at=loan.due_at,
             returned_at=loan.returned_at,
+        )
+
+
+class UserProfileResponse(BaseModel):
+    id: UUID
+    name: str
+    email: str
+    role: str
+    active: bool
+
+    @classmethod
+    def of(cls, profile: UserProfile) -> "UserProfileResponse":
+        return cls(
+            id=profile.id,
+            name=profile.name,
+            email=profile.email,
+            role=profile.role,
+            active=profile.active,
         )
