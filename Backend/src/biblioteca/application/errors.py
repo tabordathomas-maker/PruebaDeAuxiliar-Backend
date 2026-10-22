@@ -17,6 +17,10 @@ class BusinessRuleError(ApplicationError):
     """La operación viola una regla de negocio (sin stock, transición no válida...)."""
 
 
+class StockError(BusinessRuleError):
+    """Las copias del libro no permiten la operación."""
+
+
 class InvalidCredentialsError(ApplicationError):
     pass
 
