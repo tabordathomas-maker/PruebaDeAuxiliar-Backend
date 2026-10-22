@@ -100,9 +100,9 @@ def test_loans_belong_to_one_user_and_one_book(uow):
         uow.commit()
 
     with uow:
-        assert {l.id for l in uow.loans.list(user_id=ana.id)} == {pending.id, active.id}
+        assert {found.id for found in uow.loans.list(user_id=ana.id)} == {pending.id, active.id}
         assert len(uow.loans.list(book_id=book.id)) == 3
-        assert [l.id for l in uow.loans.list(statuses=[LoanStatus.ACTIVE])] == [active.id]
+        assert [found.id for found in uow.loans.list(statuses=[LoanStatus.ACTIVE])] == [active.id]
         assert uow.loans.get(active.id) == active
 
 

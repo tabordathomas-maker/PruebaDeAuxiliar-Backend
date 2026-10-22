@@ -31,7 +31,9 @@ from biblioteca.domain.ports import (
 
 
 def _base_roles() -> dict[UUID, Role]:
-    roles = [Role(name=name, id=uuid5(NAMESPACE_URL, f"biblioteca:role:{name}")) for name in RoleName]
+    roles = [
+        Role(name=name, id=uuid5(NAMESPACE_URL, f"biblioteca:role:{name}")) for name in RoleName
+    ]
     return {role.id: role for role in roles}
 
 
@@ -114,9 +116,13 @@ class InMemoryLoanRepository(_InMemoryRepository[Loan], LoanRepository):
         ]
         # Mismo orden que Postgres: primero los que no tienen fecha de salida y
         # después los más recientes; a igual fecha, por id.
-        undated = sorted((l for l in loans if l.loaned_at is None), key=lambda l: l.id)
-        dated = sorted((l for l in loans if l.loaned_at is not None), key=lambda l: l.id)
-        dated.sort(key=lambda l: l.loaned_at, reverse=True)
+        undated = sorted(
+            (loan for loan in loans if loan.loaned_at is None), key=lambda loan: loan.id
+        )
+        dated = sorted(
+            (loan for loan in loans if loan.loaned_at is not None), key=lambda loan: loan.id
+        )
+        dated.sort(key=lambda loan: loan.loaned_at, reverse=True)
         return deepcopy(undated + dated)
 
 

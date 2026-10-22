@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  PYTHON_VERSION: "3.14"
+  POETRY_VERSION: "2.5.1"
+
+jobs:
+  lint:
+    name: Estilo (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pipx install "poetry==${POETRY_VERSION}"
+      - run: poetry install --no-interaction
+      - run: poetry run invoke lint
+
+  test:
+    name: Pruebas y cobertura
+    runs-on: ubuntu-latest
+    # Postgres real: las pruebas de contrato e integración no se omiten en CI.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: biblioteca
+          POSTGRES_PASSWORD: biblioteca
+          POSTGRES_DB: biblioteca
+        ports:
+          - 15432:5432
+        options: >-
+          --health-cmd "pg_isready -U biblioteca -d biblioteca"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pipx install "poetry==${POETRY_VERSION}"
+      - run: poetry install --no-interaction
+      - run: poetry run invoke test
+
+  build:
+    name: Construcción de la imagen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Crear el .env con secretos aleatorios
+        run: |
+          cp .env.example .env
+          sed -i "s/^JWT_SECRET=$/JWT_SECRET=$(openssl rand -hex 32)/" .env
+          sed -i "s/^LIBRARIAN_PASSWORD=$/LIBRARIAN_PASSWORD=$(openssl rand -hex 16)/" .env
+          sed -i "s/^ADMIN_PASSWORD=$/ADMIN_PASSWORD=$(openssl rand -hex 16)/" .env
+      - name: Construir y levantar la API con Docker Compose
+        run: docker compose up -d --build --wait
+      - name: Comprobar que la API responde
+        run: curl --fail --silent http://127.0.0.1:8000/
+      - name: Registros de la API si algo falla
+        if: failure()
+        run: docker compose logs
+      - run: docker compose down -v
+        if: always()

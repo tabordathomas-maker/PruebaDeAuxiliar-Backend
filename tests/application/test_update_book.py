@@ -5,7 +5,12 @@ from uuid import uuid4
 import pytest
 
 from biblioteca.application.catalog import CreateBook, UpdateBook
-from biblioteca.application.errors import BusinessRuleError, ConflictError, NotFoundError, StockError
+from biblioteca.application.errors import (
+    BusinessRuleError,
+    ConflictError,
+    NotFoundError,
+    StockError,
+)
 from biblioteca.application.loans import BorrowBook
 
 

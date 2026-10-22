@@ -44,7 +44,9 @@ def test_extending_the_due_date_updates_the_loan_and_writes_an_audit(
     new_due = APPROVED_AT + timedelta(days=21)
 
     # Act
-    loan = _modify(memory_uow, librarian.user.id, active_loan.id, due_at=new_due, reason="Renovación")
+    loan = _modify(
+        memory_uow, librarian.user.id, active_loan.id, due_at=new_due, reason="Renovación"
+    )
 
     # Assert
     assert loan.due_at == new_due
@@ -116,14 +118,18 @@ def test_extending_an_overdue_loan_reactivates_it_and_audits_the_status(
     assert audit.new_values["status"] == "active"
 
 
-def test_two_modifications_produce_two_independent_records(memory_uow, librarian, admin, active_loan):
+def test_two_modifications_produce_two_independent_records(
+    memory_uow, librarian, admin, active_loan
+):
     # Arrange
     first_due = APPROVED_AT + timedelta(days=20)
     second_due = APPROVED_AT + timedelta(days=25)
     _modify(memory_uow, librarian.user.id, active_loan.id, due_at=first_due)
 
     # Act
-    _modify(memory_uow, admin.user.id, active_loan.id, now=NOW + timedelta(hours=1), due_at=second_due)
+    _modify(
+        memory_uow, admin.user.id, active_loan.id, now=NOW + timedelta(hours=1), due_at=second_due
+    )
 
     # Assert
     first, second = _history(memory_uow, active_loan.id)

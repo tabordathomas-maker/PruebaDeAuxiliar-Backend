@@ -125,9 +125,7 @@ class PostgresCategoryRepository(CategoryRepository):
 
     def add(self, category: Category) -> None:
         with _unique(f"Ya existe la categoría {category.name}"):
-            self.session.execute(
-                insert(t.categories).values(id=category.id, name=category.name)
-            )
+            self.session.execute(insert(t.categories).values(id=category.id, name=category.name))
 
     def get(self, category_id: UUID) -> Category | None:
         return self._one(t.categories.c.id == category_id)

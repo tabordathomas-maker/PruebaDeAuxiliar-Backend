@@ -80,9 +80,7 @@ def create_book(body: BookRequest, uow: UnitOfWork = Depends(get_uow)):
 @router.patch("/books/{book_id}", response_model=BookResponse)
 @roles(RoleName.ADMIN, RoleName.LIBRARIAN)
 def update_book(book_id: UUID, body: UpdateBookRequest, uow: UnitOfWork = Depends(get_uow)):
-    book = UpdateBook(uow).execute(
-        book_id, body.title, body.author, body.isbn, body.total_copies
-    )
+    book = UpdateBook(uow).execute(book_id, body.title, body.author, body.isbn, body.total_copies)
     return BookResponse.of(book)
 
 

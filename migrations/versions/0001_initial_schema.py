@@ -14,9 +14,7 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
-loan_status = sa.Enum(
-    "pending", "active", "overdue", "returned", "rejected", name="loan_status"
-)
+loan_status = sa.Enum("pending", "active", "overdue", "returned", "rejected", name="loan_status")
 
 
 def upgrade() -> None:

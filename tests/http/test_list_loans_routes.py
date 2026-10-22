@@ -25,7 +25,7 @@ def test_librarian_filters_by_user_and_status(client, librarian, two_readers):
     by_user = client.get("/loans", params={"user_id": str(ana.user.id)}, headers=librarian.headers)
     by_status = client.get("/loans", params={"status": "active"}, headers=librarian.headers)
 
-    assert [l["user_id"] for l in by_user.json()] == [str(ana.user.id)]
+    assert [loan["user_id"] for loan in by_user.json()] == [str(ana.user.id)]
     assert by_status.json() == []
 
 
@@ -41,7 +41,7 @@ def test_user_sees_only_their_loans(client, two_readers):
     response = client.get("/loans/me", headers=ana.headers)
 
     assert response.status_code == 200
-    assert [l["user_id"] for l in response.json()] == [str(ana.user.id)]
+    assert [loan["user_id"] for loan in response.json()] == [str(ana.user.id)]
 
 
 def test_user_cannot_list_all_loans(client, two_readers):

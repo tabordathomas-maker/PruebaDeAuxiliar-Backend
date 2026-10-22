@@ -214,7 +214,9 @@ def test_forbidden_updates_leave_the_account_untouched(
 
 
 @pytest.mark.parametrize("role", [RoleName.ADMIN, RoleName.LIBRARIAN])
-def test_staff_cannot_edit_their_own_account(memory_uow, hasher, create_account, as_principal, role):
+def test_staff_cannot_edit_their_own_account(
+    memory_uow, hasher, create_account, as_principal, role
+):
     # Arrange
     account = create_account(role)
 
@@ -333,7 +335,7 @@ def test_deactivation_keeps_the_loan_history(memory_uow, librarian, reader, as_p
 
     # Assert
     with memory_uow:
-        assert [l.id for l in memory_uow.loans.list(user_id=reader.user.id)] == [loan.id]
+        assert [found.id for found in memory_uow.loans.list(user_id=reader.user.id)] == [loan.id]
 
 
 def test_deactivating_twice_is_harmless(memory_uow, admin, reader, as_principal):
