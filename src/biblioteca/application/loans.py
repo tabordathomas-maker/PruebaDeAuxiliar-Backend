@@ -15,7 +15,7 @@ from biblioteca.application.errors import (
     NotFoundError,
     StockError,
 )
-from biblioteca.domain.entities import Loan, LoanStatus, Principal, RoleName
+from biblioteca.domain.entities import Loan, LoanModification, LoanStatus, Principal, RoleName
 from biblioteca.domain.ports import UnitOfWork
 
 # Préstamos que todavía retienen un ejemplar.
@@ -43,6 +43,19 @@ def _register_return(uow: UnitOfWork, loan: Loan, now: datetime) -> None:
     loan.returned_at = now
     uow.loans.update(loan)
     _restore_copy(uow, loan.book_id)
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Las fechas que llegan de fuera deben traer zona horaria; se guardan en UTC."""
+    if value.tzinfo is None:
+        raise BusinessRuleError("Las fechas deben incluir la zona horaria")
+    return value.astimezone(UTC)
+
+
+def _audit_value(value: datetime | LoanStatus | None) -> str | None:
+    if isinstance(value, datetime):
+        return value.astimezone(UTC).isoformat()
+    return None if value is None else str(value)
 
 
 def _get_loan_for_update(uow: UnitOfWork, loan_id: UUID) -> Loan:
@@ -197,3 +210,92 @@ class MarkLoanOverdue:
             self.uow.loans.update(loan)
             self.uow.commit()
             return loan
+
+
+class ModifyLoanTerms:
+    """Administrador o bibliotecario cambian la fecha de salida, la fecha límite o la duración.
+
+    Solo en préstamos activos o vencidos: los pendientes aún no tienen fechas y los
+    cerrados ya son historia. Si un préstamo vencido recibe una fecha límite futura,
+    vuelve a estar activo. El cambio y su registro de auditoría se confirman en la
+    misma transacción: o se guardan los dos o ninguno.
+    """
+
+    def __init__(self, uow: UnitOfWork, clock: Clock = utc_now) -> None:
+        self.uow = uow
+        self.clock = clock
+
+    def execute(
+        self,
+        actor_id: UUID,
+        loan_id: UUID,
+        loaned_at: datetime | None = None,
+        due_at: datetime | None = None,
+        duration_days: int | None = None,
+        reason: str | None = None,
+    ) -> Loan:
+        if loaned_at is None and due_at is None and duration_days is None:
+            raise BusinessRuleError("Indica la fecha de salida, la fecha límite o la duración")
+        if due_at is not None and duration_days is not None:
+            raise BusinessRuleError("Indica la fecha límite o la duración, no ambas")
+        if duration_days is not None and duration_days < 1:
+            raise BusinessRuleError("La duración debe ser de al menos un día")
+
+        now = self.clock()
+        with self.uow:
+            loan = _get_loan_for_update(self.uow, loan_id)
+            if loan.status not in LOANED_STATUSES:
+                raise BusinessRuleError(
+                    f"Solo se modifican los plazos de préstamos activos o vencidos, "
+                    f"este está {loan.status}"
+                )
+
+            new_loaned_at = _as_utc(loaned_at) if loaned_at is not None else loan.loaned_at
+            if duration_days is not None:
+                new_due_at = new_loaned_at + timedelta(days=duration_days)
+            elif due_at is not None:
+                new_due_at = _as_utc(due_at)
+            else:
+                new_due_at = loan.due_at
+            if new_loaned_at > now:
+                raise BusinessRuleError("La fecha de salida no puede estar en el futuro")
+            if new_due_at <= new_loaned_at:
+                raise BusinessRuleError("La fecha límite debe ser posterior a la de salida")
+            new_status = loan.status
+            if loan.status is LoanStatus.OVERDUE and new_due_at > now:
+                new_status = LoanStatus.ACTIVE
+
+            before = {"loaned_at": loan.loaned_at, "due_at": loan.due_at, "status": loan.status}
+            after = {"loaned_at": new_loaned_at, "due_at": new_due_at, "status": new_status}
+            changed = [name for name in before if before[name] != after[name]]
+            if not changed:
+                raise BusinessRuleError("Los plazos indicados son iguales a los actuales")
+
+            loan.loaned_at, loan.due_at, loan.status = new_loaned_at, new_due_at, new_status
+            self.uow.loans.update(loan)
+            self.uow.loan_modifications.add(
+                LoanModification(
+                    loan_id=loan.id,
+                    modified_by=actor_id,
+                    modified_at=now,
+                    changed_fields=changed,
+                    old_values={name: _audit_value(before[name]) for name in changed},
+                    new_values={name: _audit_value(after[name]) for name in changed},
+                    reason=(reason or "").strip() or None,
+                )
+            )
+            self.uow.commit()
+            return loan
+
+
+class ListLoanModifications:
+    """Historial de cambios de un préstamo, del más antiguo al más reciente."""
+
+    def __init__(self, uow: UnitOfWork) -> None:
+        self.uow = uow
+
+    def execute(self, loan_id: UUID) -> list[LoanModification]:
+        with self.uow:
+            if self.uow.loans.get(loan_id) is None:
+                raise NotFoundError("El préstamo no existe")
+            return self.uow.loan_modifications.list_by_loan(loan_id)

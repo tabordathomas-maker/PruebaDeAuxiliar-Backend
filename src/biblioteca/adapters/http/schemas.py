@@ -6,7 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from biblioteca.application.users import UserProfile
-from biblioteca.domain.entities import Book, Category, Loan, LoanStatus
+from biblioteca.domain.entities import Book, Category, Loan, LoanModification, LoanStatus
 
 
 class CategoryResponse(BaseModel):
@@ -59,6 +59,30 @@ class LoanResponse(BaseModel):
             loaned_at=loan.loaned_at,
             due_at=loan.due_at,
             returned_at=loan.returned_at,
+        )
+
+
+class LoanModificationResponse(BaseModel):
+    id: UUID
+    loan_id: UUID
+    modified_by: UUID
+    modified_at: datetime
+    changed_fields: list[str]
+    old_values: dict[str, str | None]
+    new_values: dict[str, str | None]
+    reason: str | None
+
+    @classmethod
+    def of(cls, modification: LoanModification) -> "LoanModificationResponse":
+        return cls(
+            id=modification.id,
+            loan_id=modification.loan_id,
+            modified_by=modification.modified_by,
+            modified_at=modification.modified_at,
+            changed_fields=modification.changed_fields,
+            old_values=modification.old_values,
+            new_values=modification.new_values,
+            reason=modification.reason,
         )
 
 
