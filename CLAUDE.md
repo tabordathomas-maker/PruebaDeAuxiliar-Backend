@@ -153,7 +153,7 @@ y se integra por Pull Request. Con ella, la suite queda en 348 pruebas y 98 % de
 - Cierre: `docs: add readme and er diagram`, `chore: move backend files to repository root` (ya no existe la carpeta `Backend/`), `docs: update readme for the repository root`.
 - Fase 5, admin, cuentas y auditoría: `feat: add admin role and loan audit persistence`, `feat: add account management use cases`, `feat: add book update use case`, `feat: add loan terms modification with audit`, `docs: document admin role, accounts and loan audit`.
 - Fase 6, retroalimentación (rama `fix/review-feedback`): `fix: require secrets from the environment`, `fix: answer 409 on simultaneous duplicates`, `fix: reject blank required texts`, `chore: enforce minimum test coverage`, `fix: load book categories in a single query`, `fix: keep book categories when updating a book`, `feat: store the loan request date`, `docs: update project notes for the review fixes`.
-- Pendiente: `docs/DER.jpg` sigue mostrando el esquema `0001` (`docs/er.md` sí está al día).
+- `docs/DER.jpg` y `docs/er.md` muestran el esquema actual (`0001` a `0003`). Si cambia el esquema, actualiza los dos.
 
 ## Convenciones
 

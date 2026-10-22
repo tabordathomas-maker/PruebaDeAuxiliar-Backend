@@ -1,7 +1,7 @@
 # Modelo entidad-relación
 
-La imagen original está en [`DER.jpg`](DER.jpg) y refleja el esquema inicial (`0001`).
-Esta versión en Mermaid está al día, incluidas las migraciones `0002` y `0003`, y se puede versionar
+La imagen está en [`DER.jpg`](DER.jpg). Las dos versiones reflejan el esquema actual, con
+las migraciones `0001` a `0003`. La versión en Mermaid, además, se puede versionar
 y comparar en los diffs. El esquema real está en `migrations/versions/`.
 
 ```mermaid
