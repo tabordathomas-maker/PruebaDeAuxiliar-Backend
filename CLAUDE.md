@@ -25,7 +25,7 @@ poetry run invoke env | db | migrate | seed | down
 - Consultar datos: `docker exec biblioteca-db-1 psql -U biblioteca -d biblioteca -c "…"`.
 - Cuentas del seed: `admin@example.com` y `bibliotecario@example.com`; sus claves son `ADMIN_PASSWORD` y `LIBRARIAN_PASSWORD` del `.env`. El seed no cambia la clave de una cuenta que ya existe.
 - **Secretos sin valor por defecto** (`JWT_SECRET`, `LIBRARIAN_PASSWORD`, `ADMIN_PASSWORD`): si faltan, `create_app()` lanza `ConfigurationError` y la app no arranca. `invoke env` crea el `.env` (ignorado por git) con valores aleatorios; las pruebas los fijan al inicio de `tests/conftest.py`. Nunca escribas claves reales en el código, el README ni este archivo.
-- Migraciones: `0001` (esquema inicial) y `0002` (rol admin, `users.active`, `loan_modifications`).
+- Migraciones: `0001` (esquema inicial), `0002` (rol admin, `users.active`, `loan_modifications`) y `0003` (`loans.requested_at`).
   `alembic check` confirma que `tables.py` y las migraciones coinciden. Toda tabla nueva va
   también en `DATA_TABLES` de `tests/conftest.py`.
 - Para pruebas de humo usa la base `biblioteca_test` (exporta `DATABASE_URL`), no la de desarrollo.
@@ -97,7 +97,7 @@ src/biblioteca/
   config.py              Settings (pydantic-settings, lee .env)
   seed.py                crea el administrador y el bibliotecario iniciales (idempotente)
   main.py                create_app(): registra el validador global y los routers
-migrations/              Alembic: 0001_initial_schema y 0002_admin_role_and_loan_audit
+migrations/              Alembic: 0001_initial_schema, 0002_admin_role_and_loan_audit y 0003_loan_requested_at
 ```
 
 - **Las dependencias apuntan hacia adentro:** `domain` no importa nada del proyecto y `application` solo importa `domain`.
@@ -117,7 +117,7 @@ PENDING ─aprobar─► ACTIVE ─devolver/cerrar─► RETURNED
 REJECTED          OVERDUE ──────────────────────┘
 ```
 
-- **Solicitar** (`BorrowBook`): bloquea el libro y falla si el usuario ya tiene un préstamo abierto (`PENDING`, `ACTIVE` u `OVERDUE`) de ese libro o si `available_copies < 1`. Si pasa, resta 1 a `available_copies` y crea el préstamo en `PENDING`. **La copia se reserva al solicitar**, no al aprobar.
+- **Solicitar** (`BorrowBook`): bloquea el libro y falla si el usuario ya tiene un préstamo abierto (`PENDING`, `ACTIVE` u `OVERDUE`) de ese libro o si `available_copies < 1`. Si pasa, resta 1 a `available_copies` y crea el préstamo en `PENDING` con `requested_at = ahora` (recibe `clock`). **La copia se reserva al solicitar**, no al aprobar.
 - **Aprobar** (`ApproveLoan`): solo préstamos `PENDING`. Vuelve a validar el stock: el libro debe existir, los préstamos abiertos no pueden superar `total_copies` y se debe cumplir `available_copies == total_copies - abiertos`; si no, lanza `StockError`. Fija `loaned_at = ahora` y `due_at = ahora + LOAN_DAYS` (14).
 - **Cerrar** (`CloseLoan`): si es `PENDING`, lo pasa a `REJECTED`; si es `ACTIVE` u `OVERDUE`, lo pasa a `RETURNED` con `returned_at`. En los dos casos repone la copia. Desde otro estado responde 409.
 - **Devolver** (`ReturnBook`): el usuario, sobre **su** préstamo `ACTIVE` u `OVERDUE`. Un préstamo ajeno se trata como inexistente (404).

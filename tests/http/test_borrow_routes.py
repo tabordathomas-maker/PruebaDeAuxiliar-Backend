@@ -19,6 +19,16 @@ def test_user_borrows_a_book_for_themselves(client, reader, book_id):
     assert body["user_id"] == str(reader.user.id)
 
 
+def test_borrow_response_includes_the_request_date(client, reader, book_id):
+    # Act
+    response = client.post("/loans", json={"book_id": book_id}, headers=reader.headers)
+
+    # Assert
+    body = response.json()
+    assert body["requested_at"] is not None
+    assert body["loaned_at"] is None
+
+
 def test_borrow_without_copies_returns_409(client, create_account, book_id):
     first, second = create_account(), create_account()
     client.post("/loans", json={"book_id": book_id}, headers=first.headers)

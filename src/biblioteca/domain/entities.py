@@ -6,7 +6,7 @@ el dominio para que cualquier repositorio, relacional o en memoria, los trate ig
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
@@ -72,6 +72,8 @@ class Loan:
     user_id: UUID
     book_id: UUID
     status: LoanStatus = LoanStatus.PENDING
+    # Cuándo se pidió; loaned_at se fija después, al aprobar.
+    requested_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     loaned_at: datetime | None = None
     due_at: datetime | None = None
     returned_at: datetime | None = None

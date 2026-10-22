@@ -48,8 +48,9 @@ Esa única tarea hace todo lo siguiente:
 |---|---|
 | `0001` | Esquema inicial y roles `librarian` y `user` |
 | `0002` | Rol `admin`, columna `users.active` (las cuentas existentes quedan activas) y tabla `loan_modifications` |
+| `0003` | Columna `loans.requested_at`, la fecha en que se pidió el préstamo. Los préstamos existentes toman su `loaned_at`, o la hora de la migración si siguen pendientes |
 
-Las dos son aditivas. El `downgrade` de `0002` es destructivo: borra la auditoría.
+Las tres son aditivas. El `downgrade` de `0002` es destructivo: borra la auditoría.
 
 > El contenedor publica Postgres en el puerto **15432**, no en el 5432, para no chocar
 > con un Postgres instalado en la máquina. Se cambia con `DB_PORT` y `DATABASE_URL`.
@@ -153,7 +154,7 @@ PENDING ──────────► ACTIVE ──────────�
 REJECTED           OVERDUE ──────────────────────────┘
 ```
 
-- **Al solicitar** se reserva un ejemplar (`available_copies - 1`). Falla con 409 si no quedan copias. El libro se bloquea (`SELECT … FOR UPDATE`), así que dos solicitudes simultáneas no se llevan la misma copia.
+- **Al solicitar** se guarda la fecha de la solicitud (`requested_at`) y se reserva un ejemplar (`available_copies - 1`). Falla con 409 si no quedan copias. El libro se bloquea (`SELECT … FOR UPDATE`), así que dos solicitudes simultáneas no se llevan la misma copia.
 - Un usuario no puede tener dos préstamos abiertos del mismo libro.
 - **Al aprobar** empiezan a correr las fechas: `loaned_at = ahora` y `due_at = ahora + LOAN_DAYS` (14 por defecto). Antes de aprobar se **vuelve a validar el stock**. Si el libro ya no existe o sus copias no cuadran con los préstamos abiertos, la aprobación falla con un error de stock (409).
 - **Cerrar** rechaza un préstamo pendiente o registra la devolución de uno activo o vencido. En ambos casos repone el ejemplar.
