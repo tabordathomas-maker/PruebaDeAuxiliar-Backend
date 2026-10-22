@@ -12,6 +12,7 @@ from biblioteca.application.catalog import (
     CreateCategory,
     ListCategories,
 )
+from biblioteca.application.search import SearchBooksByCategory
 from biblioteca.domain.entities import RoleName
 from biblioteca.domain.ports import UnitOfWork
 
@@ -43,6 +44,11 @@ def create_category(body: CategoryRequest, uow: UnitOfWork = Depends(get_uow)):
 @router.get("/categories", response_model=list[CategoryResponse])
 def list_categories(uow: UnitOfWork = Depends(get_uow)):
     return [CategoryResponse.of(c) for c in ListCategories(uow).execute()]
+
+
+@router.get("/books", response_model=list[BookResponse])
+def search_books(category_id: UUID, uow: UnitOfWork = Depends(get_uow)):
+    return [BookResponse.of(b) for b in SearchBooksByCategory(uow).execute(category_id)]
 
 
 @router.post("/books", status_code=201, response_model=BookResponse)
