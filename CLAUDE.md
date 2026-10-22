@@ -2,7 +2,7 @@
 
 Prueba técnica de backend: API REST con arquitectura hexagonal para prestar libros, con tres
 roles (`admin`, `librarian` y `user`). Sin interfaz gráfica ni despliegue (fuera de alcance).
-Repo: github.com/tabordathomas-maker/PruebaDeAuxiliar-Backend, rama `main`.
+Repo: github.com/tabordathomas-maker/PruebaDeAuxiliar-Backend, rama principal `main` (se trabaja en ramas y se integra por PR).
 
 Especificaciones originales (en `~/Downloads`): `BaseDelproyecto.md` (requisitos),
 `CasosDeusoPoRol.md` (casos de uso y roadmap de commits), `reglasdenegocio.txt` (decisiones del
@@ -142,19 +142,24 @@ REJECTED          OVERDUE ──────────────────
 
 ## Avance
 
-21 commits en `main`, todos subidos: el roadmap original (16) y la fase 5 de `implementar.md`
-(5). La suite queda en 307 pruebas pasando. Commits del roadmap:
+`main` tiene 24 commits: el roadmap original, la fase 5 de `implementar.md` y tres commits que
+se separaron al reescribir la historia por la retroalimentación (ver abajo). La rama
+`fix/review-feedback` corrige los puntos de `~/Downloads/retroalimentacion-prueba-backend.pdf`
+y se integra por Pull Request. Con ella, la suite queda en 348 pruebas y 98 % de cobertura.
 - Fase 1, base: `chore: add project base with poetry`, `feat: add health route`.
-- Fase 2, dominio y datos: `feat: add domain entities`, `feat: add repository ports`, `feat: add postgres repositories and schema`, `feat: add in memory repositories`.
+- Fase 2, dominio y datos: `feat: add domain entities`, `chore: switch the test client to httpx2`, `feat: add repository ports`, `feat: add postgres repositories and schema`, `feat: add in memory repositories`.
 - Fase 3, seguridad: `feat: add jwt authentication`, `feat: add global role validators`.
-- Fase 4, casos de uso: `feat: add catalog management use case`, `feat: add book search by category use case`, `feat: add borrow book use case`, `feat: add return book use case`, `feat: add list loans use case`, `feat: add librarian loan management use case`.
-- Cierre: `docs: add readme and er diagram`, `refactor: move backend files to repository root` (ya no existe la carpeta `Backend/`).
+- Fase 4, casos de uso: `feat: add catalog management use case`, `feat: add book search by category use case`, `chore: share postgres and mock fixtures across tests`, `feat: add borrow book use case`, `feat: add return book use case`, `feat: add list loans use case`, `feat: add librarian loan management use case`.
+- Cierre: `docs: add readme and er diagram`, `chore: move backend files to repository root` (ya no existe la carpeta `Backend/`), `docs: update readme for the repository root`.
 - Fase 5, admin, cuentas y auditoría: `feat: add admin role and loan audit persistence`, `feat: add account management use cases`, `feat: add book update use case`, `feat: add loan terms modification with audit`, `docs: document admin role, accounts and loan audit`.
+- Fase 6, retroalimentación (rama `fix/review-feedback`): `fix: require secrets from the environment`, `fix: answer 409 on simultaneous duplicates`, `fix: reject blank required texts`, `chore: enforce minimum test coverage`, `fix: load book categories in a single query`, `fix: keep book categories when updating a book`, `feat: store the loan request date`, `docs: update project notes for the review fixes`.
 - Pendiente: `docs/DER.jpg` sigue mostrando el esquema `0001` (`docs/er.md` sí está al día).
 
 ## Convenciones
 
-- Commits en Conventional Commits, en inglés y en minúsculas, en imperativo (`feat: add …`, `docs: …`, `refactor: …`), cada uno con sus pruebas. Si hace falta, un cuerpo breve en inglés explica el porqué.
+- Commits en Conventional Commits, en inglés y en minúsculas, en imperativo. **Solo los prefijos `feat`, `fix`, `chore` y `docs`** (nada de `refactor:`). Si hace falta, un cuerpo breve en inglés explica el porqué.
+- **Un solo cambio por commit**, con sus pruebas, y cada commit pasa sus propias pruebas. Un cambio de dependencias, una reorganización de pruebas o un traslado de archivos van en su propio commit (`chore:`), no mezclados con una funcionalidad.
+- **Trabaja en ramas** (`fix/…`, `feat/…`, `docs/…`) y se integran por Pull Request; no subas directo a `main`.
 - **El usuario es el único autor:** nunca añadas `Co-Authored-By` ni atribución a Claude en commits o PRs.
 - No hagas commit ni push sin que el usuario lo pida.
 - Código, docstrings, comentarios y mensajes de error en español; identificadores en inglés.
