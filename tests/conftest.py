@@ -1,13 +1,31 @@
 """Fixtures compartidos: repositorios en memoria y Postgres, seguridad y cuentas de prueba.
 
 Los fixtures de Postgres usan una base aparte (TEST_DATABASE_URL) y omiten la prueba
-si no hay servidor disponible: `invoke db` lo levanta.
+si no hay servidor disponible: `invoke db` lo levanta. Si TEST_DATABASE_URL no está
+definida, se usa la DATABASE_URL del entorno o del .env con la base `biblioteca_test`.
 """
 
 import os
 
+from dotenv import dotenv_values
+from sqlalchemy import make_url
+
+# Sin DATABASE_URL no hay credenciales: las pruebas de Postgres se omiten al no conectarse.
+os.environ.setdefault(
+    "TEST_DATABASE_URL",
+    make_url(
+        os.getenv("DATABASE_URL")
+        or dotenv_values(".env").get("DATABASE_URL")
+        or "postgresql+psycopg://localhost:15432/biblioteca"
+    )
+    .set(database="biblioteca_test")
+    .render_as_string(hide_password=False),
+)
+
 # La configuración exige secretos sin valor por defecto; las pruebas usan los suyos.
-# Va antes de importar la app, que valida la configuración al crearse.
+# Va antes de importar la app, que valida la configuración al crearse. Sin DATABASE_URL
+# propia, la app apunta a la base de pruebas, nunca a la de desarrollo.
+os.environ.setdefault("DATABASE_URL", os.environ["TEST_DATABASE_URL"])
 os.environ.setdefault("JWT_SECRET", "secreto-de-pruebas-con-32-bytes-o-mas")
 os.environ.setdefault("LIBRARIAN_PASSWORD", "clave-de-pruebas")
 os.environ.setdefault("ADMIN_PASSWORD", "clave-de-pruebas")
@@ -19,7 +37,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, make_url, text
+from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 
 from biblioteca.adapters.http.dependencies import get_hasher, get_token_service, get_uow
@@ -43,10 +61,7 @@ from biblioteca.domain.ports import (
 )
 from biblioteca.main import create_app
 
-TEST_DATABASE_URL = os.getenv(
-    "TEST_DATABASE_URL",
-    "postgresql+psycopg://biblioteca:biblioteca@localhost:15432/biblioteca_test",
-)
+TEST_DATABASE_URL = os.environ["TEST_DATABASE_URL"]
 ALEMBIC_INI = os.path.join(os.path.dirname(__file__), "..", "alembic.ini")
 DATA_TABLES = "loan_modifications, loans, book_categories, books, categories, users"
 

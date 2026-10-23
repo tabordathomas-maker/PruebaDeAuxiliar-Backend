@@ -9,6 +9,8 @@ on:
 env:
   PYTHON_VERSION: "3.14"
   POETRY_VERSION: "2.5.1"
+  # Solo wheels ya construidos: ningún paquete ejecuta su setup.py al instalarse.
+  POETRY_INSTALLER_ONLY_BINARY: ":all:"
 
 jobs:
   lint:
@@ -19,36 +21,24 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: pipx install "poetry==${POETRY_VERSION}"
+      - run: pipx install --pip-args="--only-binary=:all:" "poetry==${POETRY_VERSION}"
       - run: poetry install --no-interaction
       - run: poetry run invoke lint
 
   test:
     name: Pruebas y cobertura
     runs-on: ubuntu-latest
-    # Postgres real: las pruebas de contrato e integración no se omiten en CI.
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: biblioteca
-          POSTGRES_PASSWORD: biblioteca
-          POSTGRES_DB: biblioteca
-        ports:
-          - 15432:5432
-        options: >-
-          --health-cmd "pg_isready -U biblioteca -d biblioteca"
-          --health-interval 2s
-          --health-timeout 3s
-          --health-retries 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: pipx install "poetry==${POETRY_VERSION}"
+      - run: pipx install --pip-args="--only-binary=:all:" "poetry==${POETRY_VERSION}"
       - run: poetry install --no-interaction
+      # Postgres real con Docker Compose y un .env de claves aleatorias (`invoke db` lo
+      # crea): las pruebas de contrato e integración no se omiten y no hay claves aquí.
       - run: poetry run invoke test
+        if: always()
 
   build:
     name: Construcción de la imagen
@@ -58,9 +48,9 @@ jobs:
       - name: Crear el .env con secretos aleatorios
         run: |
           cp .env.example .env
-          sed -i "s/^JWT_SECRET=$/JWT_SECRET=$(openssl rand -hex 32)/" .env
-          sed -i "s/^LIBRARIAN_PASSWORD=$/LIBRARIAN_PASSWORD=$(openssl rand -hex 16)/" .env
-          sed -i "s/^ADMIN_PASSWORD=$/ADMIN_PASSWORD=$(openssl rand -hex 16)/" .env
+          for name in JWT_SECRET LIBRARIAN_PASSWORD ADMIN_PASSWORD POSTGRES_PASSWORD; do
+            sed -i "s/^${name}=$/${name}=$(openssl rand -hex 32)/" .env
+          done
       - name: Construir y levantar la API con Docker Compose
         run: docker compose up -d --build --wait
       - name: Comprobar que la API responde

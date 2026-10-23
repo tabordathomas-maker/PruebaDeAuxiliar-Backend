@@ -5,7 +5,7 @@ import pytest
 from biblioteca.config import ConfigurationError, Settings, get_settings
 from biblioteca.main import create_app
 
-REQUIRED = ("JWT_SECRET", "LIBRARIAN_PASSWORD", "ADMIN_PASSWORD")
+REQUIRED = ("DATABASE_URL", "JWT_SECRET", "LIBRARIAN_PASSWORD", "ADMIN_PASSWORD")
 
 
 @pytest.fixture
@@ -42,7 +42,9 @@ def test_app_refuses_to_start_without_secrets(fresh_settings, monkeypatch):
         monkeypatch.delenv(name)
 
     # Act / Assert
-    with pytest.raises(ConfigurationError, match="ADMIN_PASSWORD, JWT_SECRET, LIBRARIAN_PASSWORD"):
+    with pytest.raises(
+        ConfigurationError, match="ADMIN_PASSWORD, DATABASE_URL, JWT_SECRET, LIBRARIAN_PASSWORD"
+    ):
         create_app()
 
 
