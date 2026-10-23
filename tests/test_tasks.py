@@ -60,6 +60,35 @@ def test_env_completes_an_existing_file_without_changing_its_values(root):
     assert values["POSTGRES_USER"] == "biblioteca"
 
 
+def test_env_appends_after_a_last_line_without_newline(root):
+    # Arrange
+    existing = "# Mis valores\nJWT_SECRET=propio\n\nLOAN_DAYS=7"
+    (root / ".env").write_text(existing, encoding="utf-8")
+
+    # Act
+    tasks.env(Context())
+
+    # Assert
+    content = (root / ".env").read_text(encoding="utf-8")
+    values = tasks.parse_env(content)
+    assert content.startswith(existing + "\n")
+    assert values["JWT_SECRET"] == "propio"
+    assert values["LOAN_DAYS"] == "7"
+    assert set(values) == set(tasks.parse_env(TEMPLATE))
+
+
+def test_env_only_touches_the_env_file(root):
+    # Arrange
+    (root / ".env").write_text("JWT_SECRET=propio\n", encoding="utf-8")
+
+    # Act
+    tasks.env(Context())
+
+    # Assert
+    assert sorted(path.name for path in root.iterdir()) == [".env", ".env.example"]
+    assert (root / ".env.example").read_text(encoding="utf-8") == TEMPLATE
+
+
 def test_env_leaves_a_complete_file_untouched(root):
     # Arrange
     tasks.env(Context())

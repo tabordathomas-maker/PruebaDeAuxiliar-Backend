@@ -92,7 +92,10 @@ def env(c):
             file.write("\n".join(lines) + "\n")
         print(".env creado; las claves de las cuentas iniciales están ahí")
     elif lines:
-        target.write_text(existing.rstrip("\n") + "\n" + "\n".join(lines) + "\n", encoding="utf-8")
+        # Solo se agregan las líneas nuevas al final: el contenido existente no se reescribe.
+        separator = "" if existing.endswith("\n") else "\n"
+        with target.open("a", encoding="utf-8") as file:
+            file.write(separator + "\n".join(lines) + "\n")
         added = ", ".join(line.partition("=")[0] for line in lines)
         print(f".env completado con: {added}")
 
