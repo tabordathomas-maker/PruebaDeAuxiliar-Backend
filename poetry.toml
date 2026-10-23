@@ -1,2 +1,7 @@
 [virtualenvs]
 in-project = true
+
+# Solo wheels ya construidos: ningún paquete ejecuta su setup.py al instalarse. Todas las
+# dependencias de poetry.lock publican wheels para Python 3.14 (Linux y Windows).
+[installer]
+only-binary = ":all:"

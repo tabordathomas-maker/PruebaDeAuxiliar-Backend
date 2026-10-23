@@ -2,12 +2,15 @@
 # segunda solo copia el entorno virtual, así la imagen final no lleva Poetry.
 FROM python:3.14-slim AS builder
 
+# Solo se instalan wheels ya construidos: ningún paquete ejecuta su setup.py al
+# instalarse (pip con --only-binary y Poetry con POETRY_INSTALLER_ONLY_BINARY).
 ENV POETRY_VERSION=2.5.1 \
     POETRY_NO_INTERACTION=1 \
+    POETRY_INSTALLER_ONLY_BINARY=:all: \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-RUN pip install "poetry==${POETRY_VERSION}"
+RUN pip install --only-binary :all: "poetry==${POETRY_VERSION}"
 
 WORKDIR /app
 

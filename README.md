@@ -30,6 +30,8 @@ cambia con `API_PORT`. `docker compose down` lo detiene.
 
 La imagen (`Dockerfile`) tiene dos etapas: la primera instala las dependencias con
 Poetry y la segunda solo copia el entorno virtual, y corre con un usuario sin privilegios.
+Solo instala wheels ya construidos (`--only-binary`), así ninguna dependencia ejecuta
+scripts de instalación; `poetry.toml` aplica la misma regla a `poetry install` en local.
 
 ## Instalar (desarrollo local)
 
