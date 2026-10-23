@@ -26,21 +26,6 @@ jobs:
   test:
     name: Pruebas y cobertura
     runs-on: ubuntu-latest
-    # Postgres real: las pruebas de contrato e integración no se omiten en CI.
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: biblioteca
-          POSTGRES_PASSWORD: biblioteca
-          POSTGRES_DB: biblioteca
-        ports:
-          - 15432:5432
-        options: >-
-          --health-cmd "pg_isready -U biblioteca -d biblioteca"
-          --health-interval 2s
-          --health-timeout 3s
-          --health-retries 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
