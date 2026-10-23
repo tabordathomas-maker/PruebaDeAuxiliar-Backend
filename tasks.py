@@ -1,26 +1,79 @@
 import secrets
 from pathlib import Path
+from urllib.parse import quote, unquote, urlsplit
 
 from invoke import task
 
-# Variables sin valor por defecto en config.py: se generan al azar al crear el .env.
-GENERATED_SECRETS = ("JWT_SECRET", "LIBRARIAN_PASSWORD", "ADMIN_PASSWORD")
+# Variables sin valor por defecto: se generan al azar al crear el .env.
+GENERATED_SECRETS = ("JWT_SECRET", "LIBRARIAN_PASSWORD", "ADMIN_PASSWORD", "POSTGRES_PASSWORD")
+
+
+def parse_env(text: str) -> dict[str, str]:
+    """Variables de un archivo .env; las líneas en blanco y los comentarios se ignoran."""
+    values = {}
+    for line in text.splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        name, sep, value = line.partition("=")
+        if sep:
+            values[name] = value
+    return values
+
+
+def database_url(values: dict[str, str]) -> str:
+    """URL de Postgres para conectarse desde la máquina al contenedor de docker-compose."""
+    user = quote(values["POSTGRES_USER"], safe="")
+    password = quote(values["POSTGRES_PASSWORD"], safe="")
+    port = values.get("DB_PORT", "15432")
+    return f"postgresql+psycopg://{user}:{password}@localhost:{port}/{values['POSTGRES_DB']}"
+
+
+def missing_value(name: str, default: str, current: dict[str, str]) -> str:
+    """Valor para una variable de .env.example que todavía no está en el .env."""
+    if name == "POSTGRES_PASSWORD" and current.get("DATABASE_URL"):
+        # Un .env anterior ya usa un volumen de Postgres creado con la clave de su URL.
+        password = urlsplit(current["DATABASE_URL"]).password
+        if password:
+            return unquote(password)
+    if default:
+        return default
+    if name in GENERATED_SECRETS:
+        return secrets.token_urlsafe(32)
+    if name == "DATABASE_URL":
+        return database_url(current)
+    return default
 
 
 @task
 def env(c):
-    """Crea el .env a partir de .env.example con secretos aleatorios, si no existe."""
+    """Crea o completa el .env a partir de .env.example, con secretos aleatorios.
+
+    Nunca cambia un valor que ya esté en el .env: solo agrega las variables que faltan.
+    """
     target = Path(".env")
-    if target.exists():
-        return
+    template = Path(".env.example").read_text(encoding="utf-8")
+    existing = target.read_text(encoding="utf-8") if target.exists() else ""
+    current = parse_env(existing)
+
     lines = []
-    for line in Path(".env.example").read_text(encoding="utf-8").splitlines():
-        name, sep, value = line.partition("=")
-        if sep and name in GENERATED_SECRETS and not value:
-            line = f"{name}={secrets.token_urlsafe(32)}"
-        lines.append(line)
-    target.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(".env creado; las claves de las cuentas iniciales están ahí")
+    for line in template.splitlines():
+        name, sep, default = line.partition("=")
+        if not sep or line.startswith("#"):
+            if not existing:
+                lines.append(line)
+            continue
+        if name in current:
+            continue
+        current[name] = missing_value(name, default, current)
+        lines.append(f"{name}={current[name]}")
+
+    if not existing:
+        target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        print(".env creado; las claves de las cuentas iniciales están ahí")
+    elif lines:
+        target.write_text(existing.rstrip("\n") + "\n" + "\n".join(lines) + "\n", encoding="utf-8")
+        added = ", ".join(line.partition("=")[0] for line in lines)
+        print(f".env completado con: {added}")
 
 
 @task(pre=[env])

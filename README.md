@@ -17,11 +17,12 @@ Stack: Python 3.12+, Poetry, FastAPI, SQLAlchemy 2 con Postgres 17, Alembic, JWT
 La forma más corta: la API y Postgres en contenedores, sin instalar Python.
 
 ```bash
-cp .env.example .env    # y completa JWT_SECRET (32+ caracteres), LIBRARIAN_PASSWORD y ADMIN_PASSWORD
+cp .env.example .env    # y completa POSTGRES_PASSWORD, JWT_SECRET (32+ caracteres), LIBRARIAN_PASSWORD y ADMIN_PASSWORD
 docker compose up --build
 ```
 
-Si tienes Poetry, `poetry run invoke env` crea el `.env` con secretos aleatorios.
+Si tienes Poetry, `poetry run invoke env` crea el `.env` con secretos aleatorios. El repositorio
+no guarda ninguna clave: Docker Compose se niega a arrancar si falta `POSTGRES_PASSWORD`.
 
 Al arrancar, el contenedor `api` aplica las migraciones, crea las cuentas iniciales si
 faltan y sirve la API en http://127.0.0.1:8000 (Swagger en `/docs`). El puerto se
@@ -35,7 +36,7 @@ Poetry y la segunda solo copia el entorno virtual, y corre con un usuario sin pr
 ```bash
 cd PruebaDeAuxiliar-Backend
 poetry install
-poetry run invoke env   # crea el .env con secretos aleatorios (invoke up también lo hace)
+poetry run invoke env   # crea o completa el .env con secretos aleatorios (invoke up también lo hace)
 ```
 
 ## Levantar
@@ -45,7 +46,7 @@ poetry run invoke up
 ```
 
 Esa única tarea hace todo lo siguiente:
-1. Crea el `.env` desde `.env.example` si no existe, con `JWT_SECRET` y las claves iniciales generadas al azar.
+1. Crea el `.env` desde `.env.example`, con `JWT_SECRET`, la clave de Postgres y las claves iniciales generadas al azar. Si ya existe, solo agrega las variables que falten y no cambia las demás.
 2. Levanta Postgres con Docker y espera a que esté listo.
 3. Aplica las migraciones, que incluyen los roles base.
 4. Crea el administrador y el bibliotecario iniciales si todavía no existen.
@@ -220,8 +221,10 @@ Está en [`docs/DER.jpg`](docs/DER.jpg), y en [`docs/er.md`](docs/er.md) en vers
 
 | Variable | Por defecto |
 |---|---|
-| `DATABASE_URL` | `postgresql+psycopg://biblioteca:biblioteca@localhost:15432/biblioteca` |
-| `TEST_DATABASE_URL` | la misma, con la base `biblioteca_test` |
+| `POSTGRES_USER` / `POSTGRES_DB` | `biblioteca` / `biblioteca` (usuario y base del contenedor) |
+| `POSTGRES_PASSWORD` | **obligatoria** para Docker Compose; Postgres la fija al crear el volumen |
+| `DATABASE_URL` | **obligatoria**, sin valor por defecto; `invoke env` la arma con las `POSTGRES_*` |
+| `TEST_DATABASE_URL` | la `DATABASE_URL`, con la base `biblioteca_test` |
 | `DB_PORT` | `15432` (puerto publicado por Docker) |
 | `JWT_SECRET` | **obligatoria**, sin valor por defecto; al menos 32 caracteres |
 | `JWT_ALGORITHM` / `JWT_EXPIRES_MINUTES` | `HS256` / `60` |

@@ -7,14 +7,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Configuración leída de variables de entorno o de un archivo .env.
 
-    Los secretos (firma de los tokens y claves de las cuentas iniciales) no tienen valor
-    por defecto: el repositorio es público y un valor escrito aquí permitiría fabricar
-    tokens. Si faltan, la aplicación no arranca.
+    Los secretos (URL de la base con su clave, firma de los tokens y claves de las cuentas
+    iniciales) no tienen valor por defecto: el repositorio es público y un valor escrito
+    aquí permitiría fabricar tokens o entrar a la base. Si faltan, la aplicación no arranca.
     """
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = "postgresql+psycopg://biblioteca:biblioteca@localhost:15432/biblioteca"
+    database_url: str = Field(min_length=1)
     jwt_secret: str = Field(min_length=32)
     jwt_algorithm: str = "HS256"
     jwt_expires_minutes: int = 60

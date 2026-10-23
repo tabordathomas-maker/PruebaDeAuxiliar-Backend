@@ -1,16 +1,19 @@
 services:
   db:
     image: postgres:17-alpine
+    # Credenciales leídas del .env (`invoke env` lo crea con una clave aleatoria).
+    # POSTGRES_PASSWORD solo se aplica al crear el volumen: un volumen existente
+    # conserva la clave con la que se creó.
     environment:
-      POSTGRES_USER: biblioteca
-      POSTGRES_PASSWORD: biblioteca
-      POSTGRES_DB: biblioteca
+      POSTGRES_USER: ${POSTGRES_USER:-biblioteca}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en el .env; ejecuta invoke env}
+      POSTGRES_DB: ${POSTGRES_DB:-biblioteca}
     ports:
       - "${DB_PORT:-15432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U biblioteca -d biblioteca"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 2s
       timeout: 3s
       retries: 30
@@ -20,7 +23,7 @@ services:
     # Los secretos (JWT_SECRET y las claves iniciales) vienen del .env: `invoke env` lo crea.
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+psycopg://biblioteca:biblioteca@db:5432/biblioteca
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-biblioteca}:${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en el .env; ejecuta invoke env}@db:5432/${POSTGRES_DB:-biblioteca}
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
