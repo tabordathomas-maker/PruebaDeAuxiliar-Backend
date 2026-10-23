@@ -1,11 +1,28 @@
+import re
 import secrets
 from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
 
 from invoke import task
 
+# Carpeta del proyecto: las tareas solo leen y escriben archivos dentro de ella.
+ROOT = Path(__file__).resolve().parent
+
 # Variables sin valor por defecto: se generan al azar al crear el .env.
 GENERATED_SECRETS = ("JWT_SECRET", "LIBRARIAN_PASSWORD", "ADMIN_PASSWORD", "POSTGRES_PASSWORD")
+VARIABLE_NAME = re.compile(r"[A-Z][A-Z0-9_]*")
+
+
+def project_file(name: str) -> Path:
+    """Ruta de un archivo de la raíz del proyecto.
+
+    Se resuelve la ruta (incluidos los enlaces simbólicos) y se rechaza si apunta fuera
+    de la carpeta del proyecto, para no leer ni escribir archivos ajenos.
+    """
+    path = (ROOT / name).resolve()
+    if path.parent != ROOT:
+        raise ValueError(f"{name} debe estar en la carpeta del proyecto ({ROOT})")
+    return path
 
 
 def parse_env(text: str) -> dict[str, str]:
@@ -15,8 +32,9 @@ def parse_env(text: str) -> dict[str, str]:
         if not line.strip() or line.startswith("#"):
             continue
         name, sep, value = line.partition("=")
-        if sep:
-            values[name] = value
+        if not sep or not VARIABLE_NAME.fullmatch(name):
+            raise ValueError(f"Línea inválida en el archivo de entorno: {line!r}")
+        values[name] = value
     return values
 
 
@@ -50,8 +68,9 @@ def env(c):
 
     Nunca cambia un valor que ya esté en el .env: solo agrega las variables que faltan.
     """
-    target = Path(".env")
-    template = Path(".env.example").read_text(encoding="utf-8")
+    target = project_file(".env")
+    template = project_file(".env.example").read_text(encoding="utf-8")
+    parse_env(template)
     existing = target.read_text(encoding="utf-8") if target.exists() else ""
     current = parse_env(existing)
 
@@ -68,7 +87,9 @@ def env(c):
         lines.append(f"{name}={current[name]}")
 
     if not existing:
-        target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        # "x": falla si el archivo apareció entre la comprobación y la escritura.
+        with target.open("x", encoding="utf-8") as file:
+            file.write("\n".join(lines) + "\n")
         print(".env creado; las claves de las cuentas iniciales están ahí")
     elif lines:
         target.write_text(existing.rstrip("\n") + "\n" + "\n".join(lines) + "\n", encoding="utf-8")

@@ -1,4 +1,4 @@
-"""`invoke env`: crea o completa el .env sin cambiar sus valores (patrón AAA)."""
+"""`invoke env`: crea o completa el .env sin salir de la carpeta del proyecto (patrón AAA)."""
 
 import pytest
 from invoke import Context
@@ -18,7 +18,7 @@ LOAN_DAYS=14
 @pytest.fixture
 def root(tmp_path, monkeypatch):
     """Un proyecto falso con su .env.example, para no tocar el .env real."""
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(tasks, "ROOT", tmp_path.resolve())
     (tmp_path / ".env.example").write_text(TEMPLATE, encoding="utf-8")
     return tmp_path
 
@@ -70,3 +70,35 @@ def test_env_leaves_a_complete_file_untouched(root):
 
     # Assert
     assert (root / ".env").read_text(encoding="utf-8") == before
+
+
+def test_env_rejects_a_symlink_that_points_outside_the_project(root, tmp_path_factory):
+    # Arrange
+    outside = tmp_path_factory.mktemp("fuera") / "objetivo"
+    outside.write_text("", encoding="utf-8")
+    try:
+        (root / ".env").symlink_to(outside)
+    except OSError:
+        pytest.skip("El sistema no permite crear enlaces simbólicos")
+
+    # Act / Assert
+    with pytest.raises(ValueError, match="carpeta del proyecto"):
+        tasks.env(Context())
+    assert outside.read_text(encoding="utf-8") == ""
+
+
+@pytest.mark.parametrize("name", ["../.env", "sub/.env"])
+def test_project_file_rejects_paths_outside_the_root(root, name):
+    # Act / Assert
+    with pytest.raises(ValueError, match="carpeta del proyecto"):
+        tasks.project_file(name)
+
+
+def test_env_rejects_an_invalid_template(root):
+    # Arrange
+    (root / ".env.example").write_text("../../etc/passwd\n", encoding="utf-8")
+
+    # Act / Assert
+    with pytest.raises(ValueError, match="Línea inválida"):
+        tasks.env(Context())
+    assert not (root / ".env").exists()
