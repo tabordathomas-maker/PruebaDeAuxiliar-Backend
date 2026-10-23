@@ -116,11 +116,15 @@ def seed(c):
     c.run("python -m biblioteca.seed")
 
 
-@task(pre=[seed])
+@task(pre=[env])
 def up(c):
-    """Levanta toda la aplicación: base de datos y servidor HTTP."""
-    c.run("docker-compose up --build -d")
+    """Levanta toda la aplicación en Docker: Postgres y la API.
 
+    El contenedor de la API aplica las migraciones y el seed antes de arrancar.
+    """
+    c.run("docker compose up --build -d --wait")
+    port = parse_env(project_file(".env").read_text(encoding="utf-8")).get("API_PORT", "8000")
+    print(f"API lista. Swagger: http://localhost:{port}/docs")
 
 
 @task
