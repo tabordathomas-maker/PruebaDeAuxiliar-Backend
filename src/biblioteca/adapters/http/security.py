@@ -9,7 +9,8 @@ desactivada o cambió de rol. Las rutas marcadas con @public no lo exigen. Las m
 
 from collections.abc import Callable
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.routing import APIRoute
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from biblioteca.adapters.http.dependencies import get_token_service, get_uow
@@ -19,6 +20,8 @@ from biblioteca.domain.ports import TokenService, UnitOfWork
 
 _bearer = HTTPBearer(auto_error=False)
 _UNAUTHORIZED_HEADERS = {"WWW-Authenticate": "Bearer"}
+# Roles que se anuncian en el resumen de Swagger, en este orden.
+_LABELED_ROLES = {RoleName.ADMIN: "Admin", RoleName.LIBRARIAN: "Librarian"}
 
 
 def public(endpoint: Callable) -> Callable:
@@ -61,3 +64,20 @@ def global_validator(
 def current_principal(request: Request) -> Principal:
     """El usuario autenticado de la petición, ya validado por global_validator."""
     return request.state.principal
+
+
+def label_restricted_routes(router: APIRouter) -> APIRouter:
+    """Añade al resumen de Swagger los roles exclusivos de cada ruta: (Admin), (Librarian).
+
+    Es idempotente: create_app() puede llamarse varias veces sobre los mismos routers.
+    """
+    for route in router.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        allowed = getattr(route.endpoint, "__roles__", frozenset())
+        labels = [label for role, label in _LABELED_ROLES.items() if role in allowed]
+        suffix = f" ({', '.join(labels)})"
+        summary = route.summary or route.name.replace("_", " ").title()
+        if labels and not summary.endswith(suffix):
+            route.summary = summary + suffix
+    return router
